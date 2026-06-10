@@ -1,0 +1,356 @@
+[
+  {
+    "id": "Q_GENDER",
+    "type": "free_text",
+    "main_question": "What's your gender?",
+    "followups": []
+  },
+  {
+    "id": "Q_PRONOUNS",
+    "type": "free_text",
+    "main_question": "What pronouns do you use?",
+    "followups": []
+  },
+  {
+    "id": "Q_FAMILY",
+    "type": "free_text",
+    "main_question": "Tell me about your family?",
+    "followups": []
+  },
+  {
+    "id": "Q_FROM",
+    "type": "free_text",
+    "main_question": "Where are you from?",
+    "followups": []
+  },
+  {
+    "id": "Q_PETS",
+    "type": "free_text",
+    "main_question": "Do you have any pets?",
+    "followups": [
+      {
+        "id": "Q_PETS_F1",
+        "question": "Tell me more about them?",
+        "when": "they said they DO have pets, and haven't already described them"
+      },
+      {
+        "id": "Q_PETS_F2",
+        "question": "Do you want pets?",
+        "when": "they said they do NOT have pets, and haven't already said whether they want any"
+      }
+    ]
+  },
+  {
+    "id": "Q_LIVE",
+    "type": "free_text",
+    "main_question": "Where do you currently live?",
+    "followups": [
+      {
+        "id": "Q_LIVE_F1",
+        "question": "Do you like it there? Why or why not?",
+        "when": "they haven't already shared how they feel about living there"
+      },
+      {
+        "id": "Q_LIVE_F2",
+        "question": "If you could live anywhere else, where would it be?",
+        "when": "they haven't already mentioned somewhere they'd rather live"
+      }
+    ]
+  },
+  {
+    "id": "Q_JOB",
+    "type": "free_text",
+    "main_question": "What's your current occupation?",
+    "followups": [
+      {
+        "id": "Q_JOB_F1",
+        "question": "Do you like what you do or do you see yourself doing something different in the future?",
+        "when": "they haven't already shared how they feel about their work or future plans"
+      }
+    ]
+  },
+  {
+    "id": "Q_FREETIME",
+    "type": "free_text",
+    "main_question": "What do you like to do in your free time?",
+    "followups": []
+  },
+  {
+    "id": "Q_SPORTS_PLAY",
+    "type": "free_text",
+    "main_question": "Do you play any sports?",
+    "followups": []
+  },
+  {
+    "id": "Q_SPORTS_WATCH",
+    "type": "free_text",
+    "main_question": "Do you have any favorite sports/teams you like to watch?",
+    "followups": []
+  },
+  {
+    "id": "Q_MEDIA",
+    "type": "free_text",
+    "main_question": "Any favorite movies/TV shows/books? Why are they your favorites?",
+    "followups": []
+  },
+  {
+    "id": "Q_MUSIC",
+    "type": "free_text",
+    "main_question": "Tell me about your music taste, what genres do you listen to and who are your favorite artists?",
+    "followups": []
+  },
+  {
+    "id": "Q_FOOD",
+    "type": "free_text",
+    "main_question": "What's your favorite type of cuisine? Favorite dish to order?",
+    "followups": []
+  },
+  {
+    "id": "Q_TRAVEL",
+    "type": "free_text",
+    "main_question": "Tell me about the best place you've ever traveled to?",
+    "followups": []
+  },
+  {
+    "id": "Q_BUCKET",
+    "type": "free_text",
+    "main_question": "What's something on your bucket list?",
+    "followups": []
+  },
+  {
+    "id": "Q_GREENFLAG",
+    "type": "free_text",
+    "main_question": "What's a green flag you look for in friends?",
+    "followups": []
+  },
+  {
+    "id": "Q_ROLEMODEL",
+    "type": "free_text",
+    "main_question": "Who is your role model? Why? If you don't have one, why not?",
+    "followups": []
+  },
+  {
+    "id": "Q_DREAM",
+    "type": "free_text",
+    "main_question": "What does your dream job/life look like?",
+    "followups": []
+  },
+  {
+    "id": "SPC_TIPI",
+    "type": "likert_battery",
+    "main_question": "Please select an option next to each statement to indicate the extent to which you agree or disagree with that statement: \"I see myself as...\"",
+    "scale_labels": [
+      "Strongly disagree",
+      "Disagree",
+      "Somewhat disagree",
+      "Neither agree nor disagree",
+      "Somewhat agree",
+      "Agree",
+      "Strongly agree"
+    ],
+    "items": [
+      {
+        "id": "tipi_1",
+        "text": "Extraverted, enthusiastic."
+      },
+      {
+        "id": "tipi_2",
+        "text": "Critical, argumentative."
+      },
+      {
+        "id": "tipi_3",
+        "text": "Dependable, self-disciplined."
+      },
+      {
+        "id": "tipi_4",
+        "text": "Anxious, easily upset."
+      },
+      {
+        "id": "tipi_5",
+        "text": "Open to new experiences, complex."
+      },
+      {
+        "id": "tipi_6",
+        "text": "Reserved, quiet."
+      },
+      {
+        "id": "tipi_7",
+        "text": "Sympathetic, warm."
+      },
+      {
+        "id": "tipi_8",
+        "text": "Disorganized, careless."
+      },
+      {
+        "id": "tipi_9",
+        "text": "Calm, emotionally stable."
+      },
+      {
+        "id": "tipi_10",
+        "text": "Conventional, uncreative."
+      }
+    ],
+    "feeds_spc": true
+  },
+  {
+    "id": "SPC_PVQ",
+    "type": "likert_battery",
+    "main_question": "Please select the option that shows how much the person in the description is like you.",
+    "scale_labels": [
+      "Strongly disagree",
+      "Disagree",
+      "Somewhat disagree",
+      "Neither agree nor disagree",
+      "Somewhat agree",
+      "Agree",
+      "Strongly agree"
+    ],
+    "items": [
+      {
+        "id": "pvq_1",
+        "text": "Thinking up new ideas and being creative is important to the person. The person likes to do things in their own original way."
+      },
+      {
+        "id": "pvq_2",
+        "text": "It is important for the person to be rich. The person wants to have a lot of money and expensive things."
+      },
+      {
+        "id": "pvq_3",
+        "text": "The person thinks it is important that every person in the world be treated equally. The person believes everyone should have equal opportunities in life."
+      },
+      {
+        "id": "pvq_4",
+        "text": "It's important to the person to show their abilities. The person wants people to admire what they do."
+      },
+      {
+        "id": "pvq_5",
+        "text": "It is important to the person to live in secure surroundings. The person avoids anything that might endanger their safety."
+      },
+      {
+        "id": "pvq_6",
+        "text": "The person likes surprises and is always looking for new things to do. The person thinks it is important to do lots of different things in life."
+      },
+      {
+        "id": "pvq_7",
+        "text": "The person believes that people should do what they're told. The person thinks people should follow rules at all times, even when no-one is watching."
+      },
+      {
+        "id": "pvq_8",
+        "text": "It is important to the person to listen to people who are different from them. Even when the person disagrees with people, it is still important to understand them."
+      },
+      {
+        "id": "pvq_9",
+        "text": "It is important to the person to be humble and modest. The person tries not to draw attention to themselves."
+      },
+      {
+        "id": "pvq_10",
+        "text": "Having a good time is important to the person. The person likes to 'spoil' themselves."
+      },
+      {
+        "id": "pvq_11",
+        "text": "It is important to the person to make their own decisions about what they do. The person likes to be free and not depend on others."
+      },
+      {
+        "id": "pvq_12",
+        "text": "It's very important to the person to help the people around them. The person wants to care for their well-being."
+      },
+      {
+        "id": "pvq_13",
+        "text": "Being very successful is important to the person. The person hopes people will recognize their achievements."
+      },
+      {
+        "id": "pvq_14",
+        "text": "It is important to the person that the government insure their safety against all threats. The person wants the state to be strong so it can defend its citizens."
+      },
+      {
+        "id": "pvq_15",
+        "text": "The person looks for adventures and likes to take risks. The person wants to have an exciting life."
+      },
+      {
+        "id": "pvq_16",
+        "text": "It is important to the person always to behave properly. The person wants to avoid doing anything people would say is wrong."
+      },
+      {
+        "id": "pvq_17",
+        "text": "It is important to the person to get respect from others. The person wants people to do what they say."
+      },
+      {
+        "id": "pvq_18",
+        "text": "It is important to the person to be loyal to their friends. The person wants to devote themselves to people close to them."
+      },
+      {
+        "id": "pvq_19",
+        "text": "The person strongly believes that people should care for nature. Looking after the environment is important to this person."
+      },
+      {
+        "id": "pvq_20",
+        "text": "Tradition is important to the person. The person tries to follow the customs handed down by their religion or their family."
+      },
+      {
+        "id": "pvq_21",
+        "text": "The person seeks every chance they can to have fun. It is important to this person to do things that give them pleasure."
+      }
+    ],
+    "feeds_spc": true
+  },
+  {
+    "id": "SPC_MBTI",
+    "type": "choice",
+    "optional": true,
+    "main_question": "If you know your MBTI personality type, what is it? (Optional — feel free to skip if you don't know it or would rather not say.)",
+    "options": [
+      "INTJ",
+      "INTP",
+      "ENTJ",
+      "ENTP",
+      "INFJ",
+      "INFP",
+      "ENFJ",
+      "ENFP",
+      "ISTJ",
+      "ISFJ",
+      "ESTJ",
+      "ESFJ",
+      "ISTP",
+      "ISFP",
+      "ESTP",
+      "ESFP"
+    ],
+    "feeds_spc": true
+  },
+  {
+    "id": "SPC_LOVES",
+    "type": "list",
+    "min_items": 5,
+    "feeds_spc": true,
+    "main_question": "List at least 5 things you love (hobbies, activities, foods, places, etc.)"
+  },
+  {
+    "id": "SPC_HATES",
+    "type": "list",
+    "min_items": 5,
+    "feeds_spc": true,
+    "main_question": "List at least 5 things you hate"
+  },
+  {
+    "id": "SPC_WEEKDAY",
+    "type": "long_text",
+    "recommended_chars": 450,
+    "feeds_spc": true,
+    "main_question": "What is your typical weekday routine? Describe your typical weekday from wake-up to bedtime. We recommend at least 450 characters (more than 5-7 sentences)."
+  },
+  {
+    "id": "SPC_WEEKEND",
+    "type": "long_text",
+    "recommended_chars": 450,
+    "feeds_spc": true,
+    "main_question": "What is your typical weekend routine? Describe your typical weekend from wake-up to bedtime. We recommend at least 450 characters (more than 5-7 sentences)."
+  },
+  {
+    "id": "Q_ANYTHING_ELSE",
+    "type": "free_text",
+    "decompose_to_qa": true,
+    "main_question": "Anything else you want me to know about you?",
+    "followups": []
+  }
+]

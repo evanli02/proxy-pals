@@ -1,0 +1,192 @@
+[
+    {
+        "id": "Q1",
+        "main_question": "What major are you in?",
+        "category": "personal",
+        "followups": [
+            {
+                "id": "F1a",
+                "question": "What year are you in?"
+            },
+            {
+                "id": "F1b",
+                "question": "Do you have any double majors?"
+            }
+        ]
+    },
+    {
+        "id": "Q2",
+        "main_question": "Do you have any pets?",
+        "category": "personal",
+        "followups": [
+            {
+                "id": "F2a",
+                "question": "How long have you had your pet for?"
+            },
+            {
+                "id": "F2b",
+                "question": "What's your pet's name?"
+            }
+        ]
+    },
+    {
+        "id": "Q3",
+        "main_question": "Where did you grow up?",
+        "category": "personal",
+        "followups": [
+            {
+                "id": "F3a",
+                "question": "What did you like most about where you grew up?"
+            },
+            {
+                "id": "F3b",
+                "question": "Does your family stay there?"
+            }
+        ]
+    },
+    {
+        "id": "Q4",
+        "main_question": "Do you have any siblings?",
+        "category": "personal",
+        "followups": []
+    },
+    {
+        "id": "Q5",
+        "main_question": "What did you want to be when you were younger?",
+        "category": "career",
+        "followups": [
+            {
+                "id": "F5a",
+                "question": "Do you think that's related to what you are doing now?"
+            }
+        ]
+    },
+    {
+        "id": "Q6",
+        "main_question": "Where do you see yourself 5 years from now?",
+        "category": "career",
+        "followups": [
+            {
+                "id": "F6a",
+                "question": "What do you need to do to get to where you see yourself?"
+            }
+        ]
+    },
+    {
+        "id": "Q7",
+        "main_question": "Do you do any physical exercise or play any sports?",
+        "category": "hobbies",
+        "followups": [
+            {
+                "id": "F7a",
+                "question": "How did you get into that?"
+            }
+        ]
+    },
+    {
+        "id": "Q8",
+        "main_question": "How about some static activity? What was the last movie you've seen?",
+        "category": "entertainment",
+        "followups": [
+            {
+                "id": "F8a",
+                "question": "What did you think of it?"
+            }
+        ]
+    },
+    {
+        "id": "Q9",
+        "main_question": "Do you listen to music as well?",
+        "category": "entertainment",
+        "followups": [
+            {
+                "id": "F9a",
+                "question": "What's your favorite artist or band?"
+            },
+            {
+                "id": "F9b",
+                "question": "Do you have a favorite song or album?"
+            }
+        ]
+    },
+    {
+        "id": "Q10",
+        "main_question": "What is your favorite season?",
+        "category": "travel",
+        "followups": [
+            {
+                "id": "F10a",
+                "question": "What's your favorite activity to do during this season?"
+            }
+        ]
+    },
+    {
+        "id": "Q11",
+        "main_question": "Where was the last place you went on vacation?",
+        "category": "travel",
+        "followups": [
+            {
+                "id": "F11a",
+                "question": "What was the most memorable thing about that trip?"
+            }
+        ]
+    },
+    {
+        "id": "Q12",
+        "main_question": "Would you prefer to live in the city or a rural area?",
+        "category": "lifestyle",
+        "followups": [
+            {
+                "id": "F12a",
+                "question": "Why do you prefer that?"
+            }
+        ]
+    },
+    {
+        "id": "Q13",
+        "main_question": "What is your favorite food?",
+        "category": "food",
+        "followups": []
+    },
+    {
+        "id": "Q14",
+        "main_question": "Are there any foods that you dislike or will not eat?",
+        "category": "food",
+        "followups": [
+            {
+                "id": "F14a",
+                "question": "Why do you dislike this food? Is it the texture, flavor, or a bad experience with it?"
+            }
+        ]
+    },
+    {
+        "id": "Q15",
+        "main_question": "What is your favorite restaurant in Ithaca?",
+        "category": "food",
+        "followups": [
+            {
+                "id": "F15a",
+                "question": "Is there a specific dish that you like there?"
+            },
+            {
+                "id": "F15b",
+                "question": "Whom did you go with last time?"
+            }
+        ]
+    },
+    {
+        "id": "Q16",
+        "main_question": "What is the signature dish that you cook?",
+        "category": "food",
+        "followups": [
+            {
+                "id": "F16a",
+                "question": "Where did you learn the recipe?"
+            },
+            {
+                "id": "F16b",
+                "question": "How often do you cook that dish?"
+            }
+        ]
+    }
+]

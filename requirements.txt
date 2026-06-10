@@ -1,0 +1,16 @@
+slack-sdk==3.31.0
+Flask==3.0.0
+gunicorn==21.2.0
+numpy==1.26.4
+requests==2.31.0
+pymongo[srv]>=4.7
+openai>=1.40.0
+faiss-cpu>=1.8
+python-dotenv>=1.0
+pandas>=2.0.0
+openpyxl>=3.0.0
+# --- web prototype (Phase 0) ---
+fastapi
+uvicorn
+python-multipart
+email-validator
