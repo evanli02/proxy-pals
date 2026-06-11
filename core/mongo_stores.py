@@ -192,6 +192,16 @@ class MongoInterviewStore:
             self._cache[user_id] = state
             return state
 
+    def reset(self, user_id: str) -> None:
+        with self._lock:
+            self._cache.pop(user_id, None)
+        col = self._col()
+        if col is not None:
+            try:
+                col.delete_one({"user_id": user_id})
+            except Exception as e:
+                log.error(f"Failed resetting interview for {user_id}: {e}")
+
     def save(self, state: InterviewState, profile_ready: bool = False) -> None:
         col = self._col()
         if col is None:
@@ -218,6 +228,71 @@ class MongoInterviewStore:
             )
         except Exception as e:
             log.error(f"Failed saving interview for {state.user_id}: {e}")
+
+
+# --- review loop: answer the questions your proxy couldn't ------------------
+
+class MongoReviewStore:
+    """Pending unanswered_questions -> user answers them -> each answer becomes
+    a qa_pair (embedded + searchable) and the gap is marked answered. This is
+    the web edition of the Slack app's closed-loop review feature."""
+
+    def _col(self):
+        from commons.db import get_unanswered_questions_collection
+
+        return get_unanswered_questions_collection()
+
+    def pending(self, user_id: str, limit: int = 50):
+        col = self._col()
+        if col is None:
+            return []
+        out = []
+        for doc in col.find({"user_id": user_id, "status": "pending"}).sort(
+            "created_at", -1
+        ).limit(limit):
+            out.append({
+                "id": str(doc["_id"]),
+                "question": doc.get("question", ""),
+                "category": doc.get("category", ""),
+                "created_at": str(doc.get("created_at", "")),
+            })
+        return out
+
+    def answer(self, user_id: str, item_id: str, answer_text: str) -> bool:
+        from bson import ObjectId
+        from core.training_compiler import decomposed_pairs_to_qa_items
+
+        col = self._col()
+        if col is None:
+            return False
+        try:
+            doc = col.find_one({"_id": ObjectId(item_id), "user_id": user_id,
+                                "status": "pending"})
+        except Exception:
+            return False
+        if not doc:
+            return False
+        items = decomposed_pairs_to_qa_items(
+            user_id,
+            [{"question": doc.get("question", ""), "answer": answer_text}],
+            datetime.datetime.utcnow().timestamp(),
+        )
+        # re-key so review answers don't collide with anything-else ids
+        for i, it in enumerate(items):
+            it["q_msg_id"] = f"rv_q_{item_id}_{i}"
+            it["a_msg_id"] = f"rv_a_{item_id}_{i}"
+        try:
+            from proxy_bot.rag.store import upsert_qa_items
+
+            upsert_qa_items(items)
+        except Exception as e:
+            log.error(f"Failed embedding review answer: {e}")
+            return False
+        col.update_one({"_id": doc["_id"]},
+                       {"$set": {"status": "answered",
+                                 "answer": answer_text,
+                                 "answered_at": datetime.datetime.utcnow()}})
+        return True
 
 
 # --- unanswered questions (gap queue) ---------------------------------------

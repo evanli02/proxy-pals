@@ -154,8 +154,9 @@ class ProxyEngine:
         conversation_id: str,
         text: str,
         target_visibility_on: bool = False,
+        mode: str = "mimic",
     ) -> ReplyResult:
-        definition = self.definitions.get(target_id)  # shared, read-only
+        definition = self.definitions.get(target_id, mode=mode)  # shared, read-only
         session = self.sessions.get_or_create(
             viewer_id, target_id, conversation_id, target_visibility_on
         )

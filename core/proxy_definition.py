@@ -67,6 +67,7 @@ def _extract_user_messages(messages: List[Dict[str, Any]]) -> List[str]:
         ("Question: " if m.get("role") == "assistant" else "user: ") + m.get("content", "")
         for m in messages
         if m.get("content") and m.get("role") in ("user", "assistant")
+        and not (m.get("metadata") or {}).get("skipped")
     ]
 
 

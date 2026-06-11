@@ -55,14 +55,29 @@ class InterviewTurnResult:
     question_payload: Optional[Dict[str, Any]] = None
 
 
+SKIP_MARKER = "(skipped)"
+_SKIP_PROMPT_MESSAGE = (
+    "(The user tapped Skip -- they'd rather not answer that one. Acknowledge "
+    "warmly in a word or two WITHOUT prying or commenting on the skip, and "
+    "move straight on to the next question.)"
+)
+
+
 def run_interview_turn(
     state: InterviewState,
     user_message: str,
     bank: QuestionBank,
     llm: InterviewLLM,
     model: str,
+    skip: bool = False,
 ) -> InterviewTurnResult:
-    state.messages.append({"role": "user", "content": user_message})
+    if skip:
+        state.messages.append({
+            "role": "user", "content": SKIP_MARKER, "metadata": {"skipped": True},
+        })
+        user_message = _SKIP_PROMPT_MESSAGE
+    else:
+        state.messages.append({"role": "user", "content": user_message})
 
     asked = set(state.asked_ids)
     fu_asked = set(state.follow_up_ids)
@@ -116,11 +131,14 @@ def run_interview_turn(
     }
     state.messages.append(assistant_message)
 
-    profile_ready = bank.is_complete(set(state.asked_ids))
+    # NOTE: asking the final question does NOT complete the interview --
+    # completion happens on the NEXT turn, when the user's answer to it
+    # arrives and next_main comes back None. (profile_ready == answered-all,
+    # never asked-all; flipping it here was the skipped-last-question bug.)
     return InterviewTurnResult(
         reply_text=reply_text,
         complete=False,
-        profile_ready=profile_ready,
+        profile_ready=False,
         assistant_message=assistant_message,
     )
 
@@ -220,6 +238,10 @@ class InMemoryInterviewStore:
     def save(self, state: InterviewState, profile_ready: bool = False) -> None:
         return None
 
+    def reset(self, user_id: str) -> None:
+        with self._lock:
+            self._states.pop(user_id, None)
+
 
 class InterviewEngine:
     """One call for the onboarding screen: 'user U said X to the interviewer'."""
@@ -240,6 +262,14 @@ class InterviewEngine:
         state = self.store.get_or_create(user_id)
         with state.lock:
             result = run_interview_turn(state, text, self.bank, self.llm, self.model)
+            self.store.save(state, profile_ready=result.profile_ready)
+            return result
+
+    def skip(self, *, user_id: str) -> InterviewTurnResult:
+        """Skip the current free-text question (privacy choice)."""
+        state = self.store.get_or_create(user_id)
+        with state.lock:
+            result = run_interview_turn(state, "", self.bank, self.llm, self.model, skip=True)
             self.store.save(state, profile_ready=result.profile_ready)
             return result
 

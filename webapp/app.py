@@ -31,7 +31,7 @@ from __future__ import annotations
 
 import logging
 import uuid
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Literal, Optional
 
 from pathlib import Path
 
@@ -45,9 +45,11 @@ from core.proxy_definition import ProxyDefinitionCache
 from core.proxy_engine import default_retriever
 from core.mongo_stores import (
     MongoInterviewStore,
+    MongoReviewStore,
     MongoSessionStore,
     persist_unanswered_question,
 )
+from core.bio_suggestions import default_bio_generator
 from webapp.auth import hash_password, hash_token, mint_token, verify_password
 from webapp.users import (
     ALLOWED_PHOTO_TYPES,
@@ -91,7 +93,13 @@ class ProfilePatch(BaseModel):
     name: Optional[str] = Field(default=None, min_length=1, max_length=80)
     age: Optional[int] = Field(default=None, ge=18, le=120)
     bio: Optional[str] = Field(default=None, max_length=2000)
+    city: Optional[str] = Field(default=None, max_length=80)
     transcript_visibility: Optional[bool] = None
+    proxy_mode: Optional[Literal["strict", "mimic", "free"]] = None
+
+
+class ReviewAnswerIn(BaseModel):
+    answer: str = Field(min_length=1, max_length=4000)
 
 
 class MessageIn(BaseModel):
@@ -152,6 +160,9 @@ def build_deps() -> Dict[str, Any]:
         "users": users,
         "persist_gap": persist_unanswered_question,
         "finalize_training": finalize_training,
+        "review": MongoReviewStore(),
+        "bio_generator": default_bio_generator,
+        "fetch_training_record": None,  # default: conversations lookup below
     }
 
 
@@ -162,6 +173,19 @@ def create_app(deps: Optional[Dict[str, Any]] = None) -> FastAPI:
     users = d["users"]
     persist_gap = d["persist_gap"]
     finalize_training = d.get("finalize_training") or (lambda state, bank: None)
+    review = d.get("review")
+    bio_generator = d.get("bio_generator") or (lambda record: [])
+
+    def _fetch_training_record(user_id: str):
+        custom = d.get("fetch_training_record")
+        if custom:
+            return custom(user_id)
+        from commons.db import get_conversations_collection
+
+        col = get_conversations_collection()
+        if col is None:
+            return None
+        return col.find_one({"user_id": user_id})
 
     app = FastAPI(title="Proxy Social Prototype API", version="0.2.0")
 
@@ -305,6 +329,43 @@ def create_app(deps: Optional[Dict[str, Any]] = None) -> FastAPI:
         result = interview.respond(user_id=user_id, text=body.text)
         return _interview_out(result, user_id)
 
+    @app.post("/api/interview/skip", response_model=InterviewOut)
+    def interview_skip(user_id: str = Depends(get_current_user)):
+        """Skip the current question (privacy choice). Free-text questions only."""
+        result = interview.skip(user_id=user_id)
+        return _interview_out(result, user_id)
+
+    @app.post("/api/interview/restart", status_code=204)
+    def interview_restart(user_id: str = Depends(get_current_user)):
+        """Retrain from scratch. The existing proxy stays live (old training)
+        until the new interview completes and recompiles."""
+        interview.store.reset(user_id)
+        return Response(status_code=204)
+
+    @app.post("/api/users/me/bio-suggestions")
+    def bio_suggestions(user_id: str = Depends(get_current_user)):
+        record = _fetch_training_record(user_id)
+        if not record:
+            raise HTTPException(status_code=409,
+                                detail="Finish training your standin first")
+        return {"suggestions": bio_generator(record)}
+
+    @app.get("/api/review")
+    def review_pending(user_id: str = Depends(get_current_user)):
+        """Questions people asked your standin that it couldn't answer."""
+        if review is None:
+            return {"questions": []}
+        return {"questions": review.pending(user_id)}
+
+    @app.post("/api/review/{item_id}/answer", status_code=204)
+    def review_answer(item_id: str, body: ReviewAnswerIn,
+                      user_id: str = Depends(get_current_user)):
+        """Answer a gap: it becomes searchable knowledge for your standin."""
+        if review is None or not review.answer(user_id, item_id, body.answer):
+            raise HTTPException(status_code=404, detail="Question not found")
+        proxy.definitions.invalidate(user_id)
+        return Response(status_code=204)
+
     @app.post("/api/interview/answer", response_model=InterviewOut)
     def interview_answer(body: StructuredAnswerIn, user_id: str = Depends(get_current_user)):
         """Submit a structured answer (likert battery / list / long_text / choice)."""
@@ -356,9 +417,11 @@ def create_app(deps: Optional[Dict[str, Any]] = None) -> FastAPI:
             if target_id != user_id and not target.get("profile_live"):
                 raise HTTPException(status_code=404, detail="User not found")
             visibility = bool(target.get("transcript_visibility", False))
+            mode = target.get("proxy_mode", "mimic")
         else:
             # No users record (e.g. legacy/imported proxy): fall back to store lookup
             visibility = users.get_visibility(target_id)
+            mode = "mimic"
 
         conversation_id = body.conversation_id or f"px_{uuid.uuid4().hex}"
         result = proxy.respond(
@@ -367,6 +430,7 @@ def create_app(deps: Optional[Dict[str, Any]] = None) -> FastAPI:
             conversation_id=conversation_id,
             text=body.text,
             target_visibility_on=visibility,
+            mode=mode if mode in ("strict", "mimic", "free") else "mimic",
         )
 
         if result.unanswered_question is not None:

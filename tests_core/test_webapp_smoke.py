@@ -91,7 +91,9 @@ def test_interview_progress_and_ready():
     r1 = client.post("/api/interview/message", json={"text": "hi"}, headers=h).json()
     assert r1["asked_count"] == 1 and not r1["profile_ready"]
     r2 = client.post("/api/interview/message", json={"text": "cs"}, headers=h).json()
-    assert r2["asked_count"] == 2 and r2["profile_ready"]
+    assert r2["asked_count"] == 2 and not r2["profile_ready"]  # asked != answered
+    r2 = client.post("/api/interview/message", json={"text": "pets!"}, headers=h).json()
+    assert r2["profile_ready"]
     status = client.get("/api/interview/status", headers=h).json()
     assert status["profile_ready"] and status["total_main_questions"] == 2
 

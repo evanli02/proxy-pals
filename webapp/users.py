@@ -35,7 +35,8 @@ MAX_PHOTOS = 6
 MAX_PHOTO_BYTES = 5 * 1024 * 1024
 ALLOWED_PHOTO_TYPES = {"image/jpeg", "image/png", "image/webp"}
 
-PROFILE_EDITABLE_FIELDS = {"name", "age", "bio", "transcript_visibility"}
+PROFILE_EDITABLE_FIELDS = {"name", "age", "bio", "city", "transcript_visibility", "proxy_mode"}
+PROXY_MODES = ("strict", "mimic", "free")
 
 
 class DuplicateEmailError(Exception):
@@ -55,6 +56,8 @@ def _new_user_doc(email: str, password_hash: str, name: str, age: int) -> Dict[s
         "name": name,
         "age": age,
         "bio": "",
+        "city": "",
+        "proxy_mode": "mimic",
         "photos": [],
         "transcript_visibility": False,
         "profile_live": False,
@@ -70,6 +73,8 @@ def public_profile(doc: Dict[str, Any]) -> Dict[str, Any]:
         "name": doc["name"],
         "age": doc["age"],
         "bio": doc.get("bio", ""),
+        "city": doc.get("city", ""),
+        "proxy_mode": doc.get("proxy_mode", "mimic"),
         "photos": list(doc.get("photos", [])),
         "transcript_visibility": bool(doc.get("transcript_visibility", False)),
         "profile_live": bool(doc.get("profile_live", False)),

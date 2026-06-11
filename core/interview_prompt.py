@@ -53,6 +53,11 @@ INTERVIEW_PROMPT = dedent(
   3) Follow-ups are optional. Zero is a fine number. Choose at most one, and
      only when it genuinely deepens what they were just talking about.
 
+  [SKIPPED QUESTIONS]
+  The user can tap Skip on any question. A skipped question shows up in the
+  history as "(skipped)". Never comment on, pry about, or revisit a skipped
+  topic; treat it as settled and move on warmly.
+
   [HARD OUTPUT RULES]
   - EXACTLY one question in "response" (one '?' unless the verbatim question
     itself contains several).

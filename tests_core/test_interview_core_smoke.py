@@ -53,10 +53,10 @@ def test_main_questions_advance_in_order():
 
     r2 = engine.respond(user_id="u1", text="answering q1")  # advances to Q2
     assert state.asked_ids == ["Q1", "Q2"]
-    assert r2.profile_ready, "bank exhausted after Q2 -> profile ready"
+    assert not r2.profile_ready, "asking the last question must NOT complete"
 
-    r3 = engine.respond(user_id="u1", text="answering q2")  # nothing left
-    assert r3.complete and r3.reply_text is None
+    r3 = engine.respond(user_id="u1", text="answering q2")  # the final ANSWER
+    assert r3.complete and r3.profile_ready and r3.reply_text is None
 
 
 def test_followup_stays_on_same_main():

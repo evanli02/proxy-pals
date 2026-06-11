@@ -165,7 +165,8 @@ def test_go_live_gate_end_to_end():
     assert client.get("/api/users", headers=hb).json()["profiles"] == []
 
     # Alice finishes the (1-question) interview -> profile goes live
-    r1 = client.post("/api/interview/message", headers=ha, json={"text": "hi"})
+    client.post("/api/interview/message", headers=ha, json={"text": "hi"})       # asks Q1
+    r1 = client.post("/api/interview/message", headers=ha, json={"text": "ans"}) # answers it
     assert r1.json()["profile_ready"] is True
     assert client.get("/api/users/me", headers=ha).json()["profile_live"] is True
 

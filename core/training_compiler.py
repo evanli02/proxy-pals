@@ -217,11 +217,15 @@ def compile_training(
     if qa_extractor is None:
         from proxy_bot.rag.qa_extract import extract_qa_pairs_from_conversation
         qa_extractor = extract_qa_pairs_from_conversation
+    # skipped answers (privacy choice) never become QA pairs or samples
+    clean_messages = [
+        m for m in state.messages if not (m.get("metadata") or {}).get("skipped")
+    ]
     conv_doc = {
         "user_id": state.user_id,
         "channel_id": "web_interview",
         "updated_at": created_at,
-        "messages": state.messages,
+        "messages": clean_messages,
     }
     qa_items = list(qa_extractor(conv_doc))
 

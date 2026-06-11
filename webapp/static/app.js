@@ -109,7 +109,8 @@ async function renderInterview() {
     <div id="iv-card"></div>
     <form class="composer" id="iv-form">
       <input type="text" id="iv-input" placeholder="Type your answer" autocomplete="off">
-      <button class="btn btn-primary">Send</button>
+      <button class="btn btn-primary" id="iv-send">Send</button>
+      <button class="btn btn-quiet" id="iv-skip" type="button" title="Skip this question">Skip</button>
     </form>
   </div>`);
   view.appendChild(root);
@@ -145,18 +146,31 @@ async function renderInterview() {
     if (result.reply) add("bot", result.reply);
   }
 
-  form.addEventListener("submit", async ev => {
+  const skipBtn = $("#iv-skip", root), sendBtn = $("#iv-send", root);
+  function lock(on) {  // no double-texting: composer is disabled while waiting
+    input.disabled = on; sendBtn.disabled = on; skipBtn.disabled = on;
+    if (!on) input.focus();
+  }
+  async function turn(fn, youText) {
+    if (input.disabled) return;
+    if (youText) add("you", youText);
+    lock(true);
+    const t = el(`<div class="typing"></div>`); chat.appendChild(t);
+    t.scrollIntoView({ block: "end" });
+    try { const result = await fn(); t.remove(); await handle(result); }
+    catch (e) { t.remove(); toast(e.message); }
+    lock(false);
+  }
+  form.addEventListener("submit", ev => {
     ev.preventDefault();
     const text = input.value.trim();
     if (!text) return;
-    add("you", text); input.value = "";
-    const t = el(`<div class="typing"></div>`); chat.appendChild(t);
-    try {
-      // the final turn compiles the proxy and can take ~30s
-      const result = await api("/api/interview/message", { method: "POST", body: { text } });
-      t.remove(); await handle(result);
-    } catch (e) { t.remove(); toast(e.message); }
+    input.value = "";
+    // the final turn compiles the proxy and can take ~30s
+    turn(() => api("/api/interview/message", { method: "POST", body: { text } }), text);
   });
+  skipBtn.addEventListener("click", () =>
+    turn(() => api("/api/interview/skip", { method: "POST" }), "(skipped)"));
 
   if (status.question) { form.style.display = "none"; renderSurveyCard(status.question, cardHost, handle); }
   else if (status.profile_ready) handle(status);
@@ -263,10 +277,16 @@ function renderSurveyCard(q, host, onResult) {
 }
 
 /* ================= MY PROFILE ================= */
+const MODES = [
+  { key: "strict", label: "Grounded", hint: "Sticks strictly to what you've taught it; politely deflects everything else. Safest." },
+  { key: "mimic", label: "Natural", hint: "Sounds like you and makes reasonable small inferences from what it knows. Recommended." },
+  { key: "free", label: "Improv", hint: "Free-flowing — may riff beyond what you've shared. Most fun, least controlled." },
+];
+
 async function renderMe() {
   const me = await api("/api/users/me");
   const root = el(`<div>
-    <h1 class="screen-title">${esc(me.name)}<span class="hint">, ${me.age}</span></h1>
+    <h1 class="screen-title">${esc(me.name)}<span class="hint">, ${me.age}${me.city ? " · " + esc(me.city) : ""}</span></h1>
     <p class="screen-sub">${me.profile_live
       ? `Your profile is live. <a href="#/profile/${store.userId}">Talk to your own standin</a> to audit how it represents you.`
       : `Your profile isn't live yet — <a href="#/interview">finish training your standin</a> to go live.`}</p>
@@ -278,8 +298,16 @@ async function renderMe() {
     </div>
 
     <div class="card">
-      <label class="fld">Bio</label>
-      <textarea id="me-bio" rows="4" placeholder="A couple of lines about you">${esc(me.bio)}</textarea>
+      <label class="fld">Name</label>
+      <input type="text" id="me-name" value="${esc(me.name)}">
+      <label class="fld">City</label>
+      <input type="text" id="me-city" value="${esc(me.city)}" placeholder="e.g. Ithaca, NY">
+      <label class="fld">Bio <span class="hint">(one sentence — funny remark or quick intro)</span></label>
+      <textarea id="me-bio" rows="2" placeholder="A line about you">${esc(me.bio)}</textarea>
+      <div class="row" style="margin-top:8px">
+        <button class="btn btn-quiet" id="me-suggest" type="button">Suggest bios from my training</button>
+      </div>
+      <div class="row" id="me-bio-chips" style="margin-top:8px"></div>
       <div class="toggle">
         <input type="checkbox" id="me-vis" ${me.transcript_visibility ? "checked" : ""}>
         <label for="me-vis"><b>Review standin conversations</b><br>
@@ -288,9 +316,27 @@ async function renderMe() {
       <p class="err" id="me-err"></p>
       <button class="btn btn-primary" id="me-save" style="margin-top:12px">Save changes</button>
     </div>
+
+    <div class="card">
+      <b>How your standin speaks</b>
+      <div id="me-modes"></div>
+    </div>
+
+    <div class="card" id="me-review-card">
+      <b>Questions your standin couldn't answer</b>
+      <p class="hint">People asked these; answer any of them and your standin learns the answer.</p>
+      <div id="me-review"></div>
+    </div>
+
+    <div class="card">
+      <b>Retrain</b>
+      <p class="hint">Start the interview over from the beginning. Your current standin stays live until the new training is finished.</p>
+      <button class="btn btn-danger" id="me-retrain" type="button">Retrain from scratch</button>
+    </div>
   </div>`);
   view.appendChild(root);
 
+  /* photos */
   const strip = $("#me-photos", root), file = $("#me-file", root);
   function paintPhotos(photos) {
     strip.innerHTML = "";
@@ -320,11 +366,86 @@ async function renderMe() {
     file.value = "";
   });
 
+  /* bio suggestions */
+  $("#me-suggest", root).addEventListener("click", async () => {
+    const btn = $("#me-suggest", root);
+    btn.disabled = true; btn.textContent = "Thinking…";
+    try {
+      const { suggestions } = await api("/api/users/me/bio-suggestions", { method: "POST" });
+      const chips = $("#me-bio-chips", root); chips.innerHTML = "";
+      if (!suggestions.length) toast("No suggestions yet — finish training first.");
+      suggestions.forEach(s => {
+        const c = el(`<button class="chip" type="button">${esc(s)}</button>`);
+        c.addEventListener("click", () => { $("#me-bio", root).value = s; });
+        chips.appendChild(c);
+      });
+    } catch (e) { toast(e.message); }
+    btn.disabled = false; btn.textContent = "Suggest bios from my training";
+  });
+
+  /* mode picker */
+  let mode = me.proxy_mode || "mimic";
+  const modesHost = $("#me-modes", root);
+  function paintModes() {
+    modesHost.innerHTML = "";
+    MODES.forEach(m => {
+      const r = el(`<label class="mode-row ${m.key === mode ? "sel" : ""}">
+        <input type="radio" name="pmode" ${m.key === mode ? "checked" : ""}>
+        <span><b>${m.label}</b><br><span class="hint">${m.hint}</span></span></label>`);
+      $("input", r).addEventListener("change", async () => {
+        mode = m.key; paintModes();
+        try { await api("/api/users/me", { method: "PATCH", body: { proxy_mode: mode } }); toast(`Standin set to ${m.label}`); }
+        catch (e) { toast(e.message); }
+      });
+      modesHost.appendChild(r);
+    });
+  }
+  paintModes();
+
+  /* review loop */
+  const reviewHost = $("#me-review", root);
+  async function paintReview() {
+    const { questions } = await api("/api/review");
+    reviewHost.innerHTML = "";
+    if (!questions.length) {
+      reviewHost.appendChild(el(`<p class="hint">Nothing pending — your standin has been able to answer everything so far.</p>`));
+      return;
+    }
+    questions.forEach(q => {
+      const rowEl = el(`<div class="review-item">
+        <p><span class="badge">${esc(q.category)}</span> ${esc(q.question)}</p>
+        <div class="row"><input type="text" placeholder="Your answer"><button class="btn btn-quiet" type="button">Teach</button></div>
+      </div>`);
+      $("button", rowEl).addEventListener("click", async () => {
+        const val = $("input", rowEl).value.trim();
+        if (!val) return;
+        try {
+          await api(`/api/review/${q.id}/answer`, { method: "POST", body: { answer: val } });
+          toast("Learned — your standin can answer that now.");
+          paintReview();
+        } catch (e) { toast(e.message); }
+      });
+      reviewHost.appendChild(rowEl);
+    });
+  }
+  paintReview();
+
+  /* retrain */
+  $("#me-retrain", root).addEventListener("click", async () => {
+    if (!confirm("Start the interview over? Your answers so far will be discarded (your current standin keeps working until you finish).")) return;
+    await api("/api/interview/restart", { method: "POST" });
+    nav("#/interview");
+  });
+
+  /* save */
   $("#me-save", root).addEventListener("click", async () => {
     $("#me-err", root).textContent = "";
     try {
       await api("/api/users/me", { method: "PATCH", body: {
-        bio: $("#me-bio", root).value, transcript_visibility: $("#me-vis", root).checked } });
+        name: $("#me-name", root).value.trim() || null,
+        city: $("#me-city", root).value.trim(),
+        bio: $("#me-bio", root).value,
+        transcript_visibility: $("#me-vis", root).checked } });
       toast("Saved");
     } catch (e) { $("#me-err", root).textContent = e.message; }
   });
@@ -347,7 +468,7 @@ async function renderBrowse() {
   profiles.forEach(p => {
     const c = el(`<div class="card profile-card" role="button" tabindex="0">
       <div class="ph">${p.photos.length ? `<img src="/api/photos/${p.photos[0]}" alt="">` : `<span class="initial">${esc(p.name[0] || "?")}</span>`}</div>
-      <div class="meta"><b>${esc(p.name)}</b>, ${p.age}<br><span class="hint">${esc((p.bio || "").slice(0, 64))}</span></div>
+      <div class="meta"><b>${esc(p.name)}</b>, ${p.age}${p.city ? " · " + esc(p.city) : ""}<br><span class="hint">${esc((p.bio || "").slice(0, 64))}</span></div>
     </div>`);
     const open = () => nav(`#/profile/${p.user_id}`);
     c.addEventListener("click", open);
@@ -362,7 +483,7 @@ async function renderProfile(targetId) {
   const p = await api(`/api/users/${targetId}`);
   const isSelf = targetId === store.userId;
   const root = el(`<div>
-    <h1 class="screen-title">${esc(p.name)}<span class="hint">, ${p.age}</span></h1>
+    <h1 class="screen-title">${esc(p.name)}<span class="hint">, ${p.age}${p.city ? " · " + esc(p.city) : ""}</span></h1>
     ${p.bio ? `<p class="screen-sub">${esc(p.bio)}</p>` : ""}
     <div class="gallery">${p.photos.map(pid => `<img src="/api/photos/${pid}" alt="">`).join("")}</div>
     ${isSelf ? `<div class="notice">This is your own standin — what you hear is what others hear.</div>` : ""}
@@ -377,10 +498,12 @@ async function renderProfile(targetId) {
   const chat = $("#p-chat", root), form = $("#p-form", root), input = $("#p-input", root);
   chat.appendChild(el(`<div class="speaker">STANDIN · SPEAKS AS ${esc(p.name.toUpperCase())}</div>`));
 
+  const sendBtn = $("button", form);
   form.addEventListener("submit", async ev => {
     ev.preventDefault();
-    const text = input.value.trim(); if (!text) return;
+    const text = input.value.trim(); if (!text || input.disabled) return;
     chat.appendChild(el(`<div class="msg you">${esc(text)}</div>`)); input.value = "";
+    input.disabled = true; sendBtn.disabled = true;  // no double-texting
     const t = el(`<div class="typing"></div>`); chat.appendChild(t);
     t.scrollIntoView({ block: "end" });
     try {
@@ -391,6 +514,7 @@ async function renderProfile(targetId) {
       chat.appendChild(el(`<div class="msg bot proxy">${esc(out.reply)}</div>`));
       chat.lastElementChild.scrollIntoView({ block: "end" });
     } catch (e) { t.remove(); toast(e.message); }
+    input.disabled = false; sendBtn.disabled = false; input.focus();
   });
 }
 

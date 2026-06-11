@@ -184,3 +184,20 @@ textarea { resize: vertical; min-height: 90px; }
   background: var(--ink); color: #FFF; padding: 10px 18px; border-radius: 8px;
   font-size: .9rem; max-width: 90vw;
 }
+
+/* ---------- profile additions ---------- */
+.chip {
+  font: inherit; font-size: .85rem; text-align: left; cursor: pointer;
+  background: var(--proxy-soft); border: 1px solid var(--proxy);
+  color: var(--ink); border-radius: 99px; padding: 6px 14px;
+}
+.chip:hover { background: var(--proxy); color: #FFF; }
+.mode-row {
+  display: flex; gap: 10px; align-items: flex-start; padding: 10px;
+  border: 1px solid var(--line); border-radius: 8px; margin-top: 8px; cursor: pointer;
+}
+.mode-row.sel { border-color: var(--proxy); background: var(--proxy-soft); }
+.mode-row input { margin-top: 4px; }
+.review-item { border-top: 1px solid var(--line); padding: 10px 0; }
+.review-item p { margin: 0 0 8px; }
+.review-item input { flex: 1; }
