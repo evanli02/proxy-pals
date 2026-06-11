@@ -201,3 +201,14 @@ textarea { resize: vertical; min-height: 90px; }
 .review-item { border-top: 1px solid var(--line); padding: 10px 0; }
 .review-item p { margin: 0 0 8px; }
 .review-item input { flex: 1; }
+
+/* ---------- collapsible sections ---------- */
+details.collapsible summary {
+  cursor: pointer; list-style: none; display: flex; gap: 10px; align-items: baseline;
+}
+details.collapsible summary::before {
+  content: "▸"; color: var(--proxy); font-size: .8rem; transition: transform .15s;
+}
+details.collapsible[open] summary::before { transform: rotate(90deg); }
+details.collapsible summary::-webkit-details-marker { display: none; }
+.review-item .js-answer { color: var(--ink-soft); margin: 0 0 8px; }

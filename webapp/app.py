@@ -45,6 +45,7 @@ from core.proxy_definition import ProxyDefinitionCache
 from core.proxy_engine import default_retriever
 from core.mongo_stores import (
     MongoInterviewStore,
+    MongoKnowledgeStore,
     MongoReviewStore,
     MongoSessionStore,
     persist_unanswered_question,
@@ -99,6 +100,10 @@ class ProfilePatch(BaseModel):
 
 
 class ReviewAnswerIn(BaseModel):
+    answer: str = Field(min_length=1, max_length=4000)
+
+
+class KnowledgeEditIn(BaseModel):
     answer: str = Field(min_length=1, max_length=4000)
 
 
@@ -161,6 +166,7 @@ def build_deps() -> Dict[str, Any]:
         "persist_gap": persist_unanswered_question,
         "finalize_training": finalize_training,
         "review": MongoReviewStore(),
+        "knowledge": MongoKnowledgeStore(),
         "bio_generator": default_bio_generator,
         "fetch_training_record": None,  # default: conversations lookup below
     }
@@ -174,6 +180,7 @@ def create_app(deps: Optional[Dict[str, Any]] = None) -> FastAPI:
     persist_gap = d["persist_gap"]
     finalize_training = d.get("finalize_training") or (lambda state, bank: None)
     review = d.get("review")
+    knowledge = d.get("knowledge")
     bio_generator = d.get("bio_generator") or (lambda record: [])
 
     def _fetch_training_record(user_id: str):
@@ -349,6 +356,26 @@ def create_app(deps: Optional[Dict[str, Any]] = None) -> FastAPI:
             raise HTTPException(status_code=409,
                                 detail="Finish training your standin first")
         return {"suggestions": bio_generator(record)}
+
+    @app.get("/api/knowledge")
+    def knowledge_list(user_id: str = Depends(get_current_user)):
+        """Everything your standin can answer: question/answer pairs."""
+        if knowledge is None:
+            return {"items": []}
+        return {"items": knowledge.list(user_id)}
+
+    @app.patch("/api/knowledge/{qa_id}", status_code=204)
+    def knowledge_edit(qa_id: str, body: KnowledgeEditIn,
+                       user_id: str = Depends(get_current_user)):
+        if knowledge is None or not knowledge.update(user_id, qa_id, body.answer):
+            raise HTTPException(status_code=404, detail="Not found")
+        return Response(status_code=204)
+
+    @app.delete("/api/knowledge/{qa_id}", status_code=204)
+    def knowledge_delete(qa_id: str, user_id: str = Depends(get_current_user)):
+        if knowledge is None or not knowledge.delete(user_id, qa_id):
+            raise HTTPException(status_code=404, detail="Not found")
+        return Response(status_code=204)
 
     @app.get("/api/review")
     def review_pending(user_id: str = Depends(get_current_user)):

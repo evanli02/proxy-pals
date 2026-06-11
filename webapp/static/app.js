@@ -322,11 +322,19 @@ async function renderMe() {
       <div id="me-modes"></div>
     </div>
 
-    <div class="card" id="me-review-card">
-      <b>Questions your standin couldn't answer</b>
+    <details class="card collapsible" id="me-knowledge-card">
+      <summary><b>Questions your standin can answer</b>
+        <span class="hint">everything it has learned about you</span></summary>
+      <p class="hint">Edit an answer if it's wrong or outdated; delete anything you don't want it knowing.</p>
+      <div id="me-knowledge"></div>
+    </details>
+
+    <details class="card collapsible" id="me-review-card">
+      <summary><b>Questions your standin couldn't answer</b>
+        <span class="hint" id="me-review-count"></span></summary>
       <p class="hint">People asked these; answer any of them and your standin learns the answer.</p>
       <div id="me-review"></div>
-    </div>
+    </details>
 
     <div class="card">
       <b>Retrain</b>
@@ -402,10 +410,61 @@ async function renderMe() {
   }
   paintModes();
 
+  /* knowledge: what the standin CAN answer (lazy-loaded on expand) */
+  const knowledgeCard = $("#me-knowledge-card", root);
+  const knowledgeHost = $("#me-knowledge", root);
+  let knowledgeLoaded = false;
+  async function paintKnowledge() {
+    const { items } = await api("/api/knowledge");
+    knowledgeHost.innerHTML = "";
+    if (!items.length) {
+      knowledgeHost.appendChild(el(`<p class="hint">Nothing yet — finish training and your standin's knowledge will show up here.</p>`));
+      return;
+    }
+    items.forEach(it => {
+      const rowEl = el(`<div class="review-item">
+        <p><b>${esc(it.question)}</b></p>
+        <p class="js-answer">${esc(it.answer)}</p>
+        <div class="row js-actions">
+          <button class="btn btn-quiet js-edit" type="button">Edit</button>
+          <button class="btn btn-danger js-del" type="button">Delete</button>
+        </div>
+        <div class="row js-editor" hidden>
+          <input type="text" value="${esc(it.answer)}">
+          <button class="btn btn-primary js-save" type="button">Save</button>
+          <button class="btn btn-quiet js-cancel" type="button">Cancel</button>
+        </div>
+      </div>`);
+      const editor = $(".js-editor", rowEl), actions = $(".js-actions", rowEl);
+      $(".js-edit", rowEl).addEventListener("click", () => { editor.hidden = false; actions.hidden = true; $("input", editor).focus(); });
+      $(".js-cancel", rowEl).addEventListener("click", () => { editor.hidden = true; actions.hidden = false; });
+      $(".js-save", rowEl).addEventListener("click", async () => {
+        const val = $("input", editor).value.trim();
+        if (!val) return;
+        try {
+          await api(`/api/knowledge/${it.id}`, { method: "PATCH", body: { answer: val } });
+          $(".js-answer", rowEl).textContent = val;
+          editor.hidden = true; actions.hidden = false;
+          toast("Updated — your standin will answer with this now.");
+        } catch (e) { toast(e.message); }
+      });
+      $(".js-del", rowEl).addEventListener("click", async () => {
+        if (!confirm("Delete this? Your standin will no longer know it.")) return;
+        try { await api(`/api/knowledge/${it.id}`, { method: "DELETE" }); rowEl.remove(); }
+        catch (e) { toast(e.message); }
+      });
+      knowledgeHost.appendChild(rowEl);
+    });
+  }
+  knowledgeCard.addEventListener("toggle", () => {
+    if (knowledgeCard.open && !knowledgeLoaded) { knowledgeLoaded = true; paintKnowledge(); }
+  });
+
   /* review loop */
   const reviewHost = $("#me-review", root);
   async function paintReview() {
     const { questions } = await api("/api/review");
+    $("#me-review-count", root).textContent = questions.length ? `${questions.length} pending` : "";
     reviewHost.innerHTML = "";
     if (!questions.length) {
       reviewHost.appendChild(el(`<p class="hint">Nothing pending — your standin has been able to answer everything so far.</p>`));

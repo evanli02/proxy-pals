@@ -61,6 +61,17 @@ def make_client():
             it["status"] = "answered"; self.answered.append((item_id, text)); return True
 
     review = FakeReview()
+    class FakeKnowledge:
+        def __init__(self):
+            self.items = {"qa_1": {"id": "qa_1", "question": "fav food?",
+                                   "answer": "ramen", "created_at": "now"}}
+        def list(self, uid, limit=200): return list(self.items.values())
+        def update(self, uid, qa_id, ans):
+            if qa_id not in self.items: return False
+            self.items[qa_id]["answer"] = ans; return True
+        def delete(self, uid, qa_id): return self.items.pop(qa_id, None) is not None
+
+    knowledge = FakeKnowledge()
     deps = {
         "interview": InterviewEngine(bank=BANK, store=InMemoryInterviewStore(),
                                      llm=ILLM(), model="f"),
@@ -69,10 +80,12 @@ def make_client():
         "persist_gap": lambda g: True,
         "finalize_training": lambda s, b: None,
         "review": review,
+        "knowledge": knowledge,
         "bio_generator": lambda record: ["Ramen-powered CS student.",
                                          "Will debate you about jazz."],
         "fetch_training_record": lambda uid: {"messages": [{"role": "user", "content": "hi"}]},
     }
+    deps['_knowledge'] = knowledge
     return TestClient(create_app(deps)), deps, pllm, review
 
 
@@ -187,6 +200,48 @@ def test_restart_resets_interview():
     assert deps["interview"].store.get_or_create(uid).asked_ids == []
 
 
+
+def test_survey_bridge_asks_next_question():
+    """THE BUG (round 2): after the last survey card, the next free-text
+    question must be asked immediately -- not after the user speaks first."""
+    bank = QuestionBank([
+        {"id": "S1", "type": "choice", "main_question": "Pick one", "options": ["A", "B"]},
+        {"id": "QF", "main_question": "Anything else?", "followups": []},
+    ])
+    engine = InterviewEngine(bank=bank, store=InMemoryInterviewStore(),
+                             llm=ILLM(), model="f")
+    r = engine.respond(user_id="u", text="hi")           # issues the S1 card
+    assert r.question_payload["question_id"] == "S1"
+    r = engine.submit_answer(user_id="u", question_id="S1", answer="A")
+    # the bridge turn must come back with the interviewer ASKING something
+    assert r.question_payload is None and not r.complete
+    assert r.reply_text, "bridge turn must ask the next question, not go silent"
+    state = engine.store.get_or_create("u")
+    assert state.asked_ids == ["S1", "QF"]
+    # user messages: "hi" + the structured answer transcript ("A") -- the
+    # bridge itself must not fabricate a third
+    users_msgs = [m for m in state.messages if m["role"] == "user"]
+    assert len(users_msgs) == 2 and users_msgs[-1]["content"] == "A"
+    # answering completes
+    r = engine.respond(user_id="u", text="i collect vinyl")
+    assert r.complete and r.profile_ready
+
+
+def test_knowledge_endpoints():
+    client, deps, _, _ = make_client()
+    h, _ = signup(client)
+    items = client.get("/api/knowledge", headers=h).json()["items"]
+    assert items[0]["question"] == "fav food?" and items[0]["answer"] == "ramen"
+    # edit
+    assert client.patch("/api/knowledge/qa_1", json={"answer": "tonkotsu ramen"},
+                        headers=h).status_code == 204
+    assert deps["_knowledge"].items["qa_1"]["answer"] == "tonkotsu ramen"
+    # delete
+    assert client.delete("/api/knowledge/qa_1", headers=h).status_code == 204
+    assert client.get("/api/knowledge", headers=h).json()["items"] == []
+    # unknown -> 404
+    assert client.patch("/api/knowledge/nope", json={"answer": "x"}, headers=h).status_code == 404
+
 if __name__ == "__main__":
     test_last_question_must_be_answered()
     test_skip_flow_and_exclusion()
@@ -195,4 +250,6 @@ if __name__ == "__main__":
     test_bio_suggestions()
     test_review_loop()
     test_restart_resets_interview()
+    test_survey_bridge_asks_next_question()
+    test_knowledge_endpoints()
     print("OK - all feature-batch smoke tests passed")

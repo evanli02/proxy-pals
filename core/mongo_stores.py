@@ -230,6 +230,62 @@ class MongoInterviewStore:
             log.error(f"Failed saving interview for {state.user_id}: {e}")
 
 
+# --- knowledge: the QA pairs your standin CAN answer -------------------------
+
+class MongoKnowledgeStore:
+    """List/edit/delete a user's qa_pairs. Edits rebuild qa_text and re-embed
+    through the existing rag.store path, so RAG search reflects them
+    immediately. Deletes remove the fact outright."""
+
+    def _col(self):
+        from commons.db import get_db
+
+        db = get_db()
+        return None if db is None else db.qa_pairs
+
+    def list(self, user_id: str, limit: int = 200):
+        col = self._col()
+        if col is None:
+            return []
+        out = []
+        for doc in col.find(
+            {"user_id": user_id},
+            {"qa_id": 1, "question_text": 1, "answer_text": 1, "created_at": 1},
+        ).sort("created_at", -1).limit(limit):
+            out.append({
+                "id": doc.get("qa_id") or str(doc["_id"]),
+                "question": doc.get("question_text", ""),
+                "answer": doc.get("answer_text", ""),
+                "created_at": str(doc.get("created_at", "")),
+            })
+        return out
+
+    def update(self, user_id: str, qa_id: str, new_answer: str) -> bool:
+        col = self._col()
+        if col is None:
+            return False
+        doc = col.find_one({"_id": qa_id, "user_id": user_id})
+        if not doc:
+            return False
+        q = doc.get("question_text", "")
+        doc["answer_text"] = new_answer
+        doc["qa_text"] = f"Q: {q}\nA: {new_answer}"
+        try:
+            from proxy_bot.rag.store import upsert_qa_items
+
+            upsert_qa_items([doc])  # re-embeds the new qa_text, upserts by _id
+            return True
+        except Exception as e:
+            log.error(f"Failed re-embedding edited QA {qa_id}: {e}")
+            return False
+
+    def delete(self, user_id: str, qa_id: str) -> bool:
+        col = self._col()
+        if col is None:
+            return False
+        return col.delete_one({"_id": qa_id, "user_id": user_id}).deleted_count > 0
+
+
 # --- review loop: answer the questions your proxy couldn't ------------------
 
 class MongoReviewStore:

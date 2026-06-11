@@ -61,6 +61,11 @@ _SKIP_PROMPT_MESSAGE = (
     "warmly in a word or two WITHOUT prying or commenting on the skip, and "
     "move straight on to the next question.)"
 )
+_SURVEY_BRIDGE_MESSAGE = (
+    "(The user just finished a section of survey-style questions -- there is "
+    "no chat message from them to react to. Welcome them back to the "
+    "conversation in a short, warm sentence and ask the next question.)"
+)
 
 
 def run_interview_turn(
@@ -70,13 +75,17 @@ def run_interview_turn(
     llm: InterviewLLM,
     model: str,
     skip: bool = False,
+    append_user: bool = True,
 ) -> InterviewTurnResult:
+    """``append_user=False`` runs an interviewer-initiated turn (e.g. the
+    bridge after a survey section): no user message is recorded; the synthetic
+    ``user_message`` only steers the prompt."""
     if skip:
         state.messages.append({
             "role": "user", "content": SKIP_MARKER, "metadata": {"skipped": True},
         })
         user_message = _SKIP_PROMPT_MESSAGE
-    else:
+    elif append_user:
         state.messages.append({"role": "user", "content": user_message})
 
     asked = set(state.asked_ids)
@@ -277,5 +286,14 @@ class InterviewEngine:
         state = self.store.get_or_create(user_id)
         with state.lock:
             result = submit_structured_answer(state, question_id, answer, self.bank)
+            if not result.complete and result.question_payload is None:
+                # BRIDGE TURN: the next question is conversational, and the
+                # engine otherwise only speaks in response to a user message --
+                # without this, the chat re-enables in silence and the next
+                # question is never asked until the user speaks first.
+                result = run_interview_turn(
+                    state, _SURVEY_BRIDGE_MESSAGE, self.bank, self.llm,
+                    self.model, append_user=False,
+                )
             self.store.save(state, profile_ready=result.profile_ready)
             return result
