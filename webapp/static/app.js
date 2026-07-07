@@ -98,7 +98,9 @@ window.addEventListener("hashchange", render);
 $("#signout").addEventListener("click", () => { store.token = null; store.userId = null; nav("#/auth"); });
 
 let dmPoll = null;
+let renderSeq = 0;  // guards against overlapping renders (rapid navigation)
 async function render() {
+  const seq = ++renderSeq;
   clearInterval(dmPoll); dmPoll = null;
   const hash = location.hash || "#/browse";
   if (!store.token && hash !== "#/auth") return nav("#/auth");
@@ -107,14 +109,22 @@ async function render() {
     a.classList.toggle("active", hash.startsWith("#/" + a.dataset.nav)));
   view.innerHTML = "";
   try {
-    if (hash === "#/auth") return renderAuth();
-    if (hash === "#/interview") return renderInterview();
-    if (hash === "#/me") return renderMe();
-    if (hash === "#/connections") return renderConnections();
-    if (hash.startsWith("#/dm/")) return renderDm(hash.split("/")[2]);
-    if (hash.startsWith("#/profile/")) return renderProfile(hash.split("/")[2]);
-    return renderBrowse();
-  } catch (e) { view.appendChild(el(`<p class="err">${esc(e.message)}</p>`)); }
+    // AWAIT each view: without this, async failures escape the catch and
+    // leave the page silently blank instead of showing an error.
+    if (hash === "#/auth") return await renderAuth();
+    if (hash === "#/interview") return await renderInterview();
+    if (hash === "#/me") return await renderMe();
+    if (hash === "#/connections") return await renderConnections();
+    if (hash.startsWith("#/dm/")) return await renderDm(hash.split("/")[2]);
+    if (hash.startsWith("#/profile/")) return await renderProfile(hash.split("/")[2]);
+    return await renderBrowse();
+  } catch (e) {
+    if (seq !== renderSeq) return;  // a newer render superseded this one
+    view.innerHTML = "";
+    view.appendChild(el(`<div class="card"><p class="err">Something went wrong: ${esc(e.message)}</p>
+      <a class="btn btn-quiet" href="#/browse">Back to explore</a></div>`));
+    console.error(e);
+  }
 }
 
 /* ================= AUTH ================= */
@@ -673,6 +683,7 @@ async function renderBrowse() {
 const convs = {}; // target_id -> conversation_id (session-scoped)
 async function renderProfile(targetId) {
   const p = await api(`/api/users/${targetId}`);
+  p.photos = p.photos || []; p.avatar = p.avatar || {}; p.chips = p.chips || [];
   const isSelf = targetId === store.userId;
   const anon = p.anonymous && !isSelf;
 
@@ -685,11 +696,11 @@ async function renderProfile(targetId) {
        <p class="screen-sub" style="margin-top:10px">You'll see their real profile if you both like each other.</p>`
     : `<div class="row" style="align-items:center;gap:14px;margin-top:18px">
          ${avatarSVG(p.avatar, 64)}
-         <div><h1 class="screen-title" style="margin:0">${esc(p.name)}<span class="hint">, ${p.age}${p.city ? " · " + esc(p.city) : ""}</span></h1>
+         <div><h1 class="screen-title" style="margin:0">${esc(p.name)}<span class="hint">${p.age != null ? ", " + p.age : ""}${p.city ? " · " + esc(p.city) : ""}</span></h1>
          <span class="hint">standin: ${esc(p.pseudonym)}</span></div>
        </div>
        ${p.bio ? `<p class="screen-sub" style="margin-top:10px">${esc(p.bio)}</p>` : ""}
-       ${(!isSelf && p.photos) ? `<div class="gallery">${p.photos.map(pid => `<img src="/api/photos/${pid}" alt="">`).join("")}</div>` : ""}`;
+       ${(!isSelf && (p.photos || []).length) ? `<div class="gallery">${(p.photos || []).map(pid => `<img src="/api/photos/${pid}" alt="">`).join("")}</div>` : ""}`;
 
   const likeBar = isSelf ? "" : p.connected
     ? `<div class="row" style="margin:6px 0 12px"><span class="badge" style="background:var(--you-soft);color:var(--you);border-color:var(--you)">connected</span>

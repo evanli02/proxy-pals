@@ -591,7 +591,10 @@ def create_app(deps: Optional[Dict[str, Any]] = None) -> FastAPI:
 
         @app.get("/", include_in_schema=False)
         def index():
-            return FileResponse(str(static_dir / "index.html"))
+            # no-cache so deploys take effect immediately; the versioned
+            # ?v=N asset URLs inside handle caching of js/css correctly
+            return FileResponse(str(static_dir / "index.html"),
+                                headers={"Cache-Control": "no-cache"})
 
     return app
 

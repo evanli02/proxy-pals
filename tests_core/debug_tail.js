@@ -1,0 +1,20 @@
+const fs = require("fs");
+const { JSDOM } = require("jsdom");
+const seed = JSON.parse(fs.readFileSync("/tmp/seed.json", "utf8"));
+const html = fs.readFileSync("webapp/static/index.html", "utf8");
+const js = fs.readFileSync("webapp/static/app.js", "utf8");
+const dom = new JSDOM(html, { url: "http://127.0.0.1:8901/", runScripts: "outside-only" });
+const { window } = dom;
+window.fetch = (i, init) => fetch(new URL(i, "http://127.0.0.1:8901").href, init);
+process.on("unhandledRejection", () => {});
+window.localStorage.setItem("standin_token", seed.a.token);
+window.localStorage.setItem("standin_uid", seed.a.user_id);
+window.location.hash = `#/profile/${seed.b.user_id}`;
+window.eval(js);
+setTimeout(() => {
+  const v = window.document.querySelector("#view");
+  console.log("has #p-chat:", !!v.querySelector("#p-chat"));
+  console.log("has #p-form:", !!v.querySelector("#p-form"));
+  console.log("TAIL:", v.innerHTML.slice(-500).replace(/\s+/g, " "));
+  process.exit(0);
+}, 800);
