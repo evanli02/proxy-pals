@@ -100,11 +100,15 @@ class MongoSocialStore:
 
     def liked(self, from_id: str, to_id: str) -> bool:
         db = self._db()
-        return bool(db and db.likes.find_one({"from_id": from_id, "to_id": to_id}))
+        if db is None:   # pymongo Database forbids truth-testing (`db and ...`)
+            return False
+        return db.likes.find_one({"from_id": from_id, "to_id": to_id}) is not None
 
     def connected(self, a: str, b: str) -> bool:
         db = self._db()
-        return bool(db and db.connections.find_one({"pair": _pair_key(a, b)}))
+        if db is None:
+            return False
+        return db.connections.find_one({"pair": _pair_key(a, b)}) is not None
 
     def incoming_likes(self, user_id: str) -> List[str]:
         db = self._db()

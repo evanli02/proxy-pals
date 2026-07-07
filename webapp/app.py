@@ -220,7 +220,8 @@ def create_app(deps: Optional[Dict[str, Any]] = None) -> FastAPI:
             return None
         return col.find_one({"user_id": user_id})
 
-    app = FastAPI(title="Proxy Social Prototype API", version="0.2.0")
+    APP_VERSION = "0.4.1"  # bump on every deploy-worthy change
+    app = FastAPI(title="Proxy Social Prototype API", version=APP_VERSION)
 
     # --- identity -------------------------------------------------------------
 
@@ -240,7 +241,8 @@ def create_app(deps: Optional[Dict[str, Any]] = None) -> FastAPI:
 
     @app.get("/api/health")
     def health():
-        return {"ok": True}
+        # version lets you verify WHICH code is actually deployed
+        return {"ok": True, "version": APP_VERSION}
 
     # --- auth -------------------------------------------------------------------
 
@@ -330,20 +332,25 @@ def create_app(deps: Optional[Dict[str, Any]] = None) -> FastAPI:
 
     @app.get("/api/explore")
     def explore_feed(user_id: str = Depends(get_current_user)):
-        """Ranked anonymous suggestions with why-chips. Falls back to the
-        plain browse list when features are unavailable."""
-        cards = users.list_live_profiles(exclude_user_id=user_id)
-        by_id = {c["user_id"]: c for c in cards}
-        # exclusions: connections + people you already liked
-        if social:
-            for uid in social.connections_of(user_id):
-                by_id.pop(uid, None)
-            for uid in list(by_id):
-                if social.liked(user_id, uid):
-                    by_id.pop(uid, None)
-        if explore is None or not by_id:
-            return {"profiles": list(by_id.values())}
+        """Ranked anonymous suggestions with why-chips. This route must never
+        500: any failure degrades to the plain (or empty) list with a logged
+        traceback."""
+        import traceback
         try:
+            cards = users.list_live_profiles(exclude_user_id=user_id)
+            by_id = {c["user_id"]: c for c in cards}
+        except Exception:
+            log.error("explore: listing live profiles failed\n" + traceback.format_exc())
+            return {"profiles": []}
+        try:
+            if social:
+                for uid in social.connections_of(user_id):
+                    by_id.pop(uid, None)
+                for uid in list(by_id):
+                    if social.liked(user_id, uid):
+                        by_id.pop(uid, None)
+            if explore is None or not by_id:
+                return {"profiles": list(by_id.values())}
             viewer_feats = explore.get(user_id)
             if viewer_feats is None:
                 return {"profiles": list(by_id.values())}
@@ -365,7 +372,6 @@ def create_app(deps: Optional[Dict[str, Any]] = None) -> FastAPI:
         except Exception:
             # ranking is an enhancement -- browse must never break on bad or
             # legacy data. Serve the plain list and log the full traceback.
-            import traceback
             log.error("explore ranking failed; serving unranked list\n"
                       + traceback.format_exc())
             return {"profiles": list(by_id.values())}
