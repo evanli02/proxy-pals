@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import datetime
 import logging
+import random
 import threading
 import uuid
 from dataclasses import dataclass
@@ -31,11 +32,37 @@ from typing import Any, Dict, List, Optional, Tuple
 
 log = logging.getLogger("webapp.users")
 
+_PSEUDO_ADJ = ["Cobalt", "Mossy", "Amber", "Velvet", "Static", "Lunar", "Peppered",
+               "Cosmic", "Maple", "Foggy", "Neon", "Quiet", "Wobbly", "Golden"]
+_PSEUDO_NOUN = ["Fox", "Otter", "Comet", "Cactus", "Sparrow", "Noodle", "Glacier",
+                "Puffin", "Meteor", "Fern", "Walrus", "Lantern", "Mango", "Yeti"]
+
+AVATAR_BG = ["#DFE9E4", "#F4E6D5", "#E4E0F0", "#F0E4E4", "#E0EDF0", "#EFEBD8"]
+AVATAR_BODY = ["#2F5D50", "#C77E3C", "#6B5B9E", "#A3524B", "#3F7D8C", "#8C7B3F"]
+AVATAR_EYES = ["dot", "happy", "star", "sleepy"]
+AVATAR_MOUTH = ["smile", "open", "flat", "cat"]
+AVATAR_ACC = ["none", "sprout", "halo", "antenna", "bow"]
+
+
+def random_pseudonym() -> str:
+    return f"{random.choice(_PSEUDO_ADJ)} {random.choice(_PSEUDO_NOUN)}"
+
+
+def random_avatar() -> Dict[str, str]:
+    return {
+        "bg": random.choice(AVATAR_BG),
+        "body": random.choice(AVATAR_BODY),
+        "eyes": random.choice(AVATAR_EYES),
+        "mouth": random.choice(AVATAR_MOUTH),
+        "acc": random.choice(AVATAR_ACC),
+    }
+
 MAX_PHOTOS = 6
 MAX_PHOTO_BYTES = 5 * 1024 * 1024
 ALLOWED_PHOTO_TYPES = {"image/jpeg", "image/png", "image/webp"}
 
-PROFILE_EDITABLE_FIELDS = {"name", "age", "bio", "city", "transcript_visibility", "proxy_mode"}
+PROFILE_EDITABLE_FIELDS = {"name", "age", "bio", "city", "transcript_visibility",
+                           "proxy_mode", "pseudonym", "gender", "avatar"}
 PROXY_MODES = ("strict", "mimic", "free")
 
 
@@ -57,6 +84,9 @@ def _new_user_doc(email: str, password_hash: str, name: str, age: int) -> Dict[s
         "age": age,
         "bio": "",
         "city": "",
+        "gender": "",
+        "pseudonym": random_pseudonym(),
+        "avatar": random_avatar(),
         "proxy_mode": "mimic",
         "photos": [],
         "transcript_visibility": False,
@@ -66,15 +96,32 @@ def _new_user_doc(email: str, password_hash: str, name: str, age: int) -> Dict[s
     }
 
 
+def anon_profile(doc: Dict[str, Any]) -> Dict[str, Any]:
+    """The anonymous face of a profile: pseudonym + avatar, nothing more.
+    This is all a stranger sees until a mutual connection exists."""
+    return {
+        "user_id": doc["user_id"],
+        "pseudonym": doc.get("pseudonym", "Anonymous"),
+        "avatar": doc.get("avatar", {}),
+        "profile_live": bool(doc.get("profile_live", False)),
+        "transcript_visibility": bool(doc.get("transcript_visibility", False)),
+        "anonymous": True,
+    }
+
+
 def public_profile(doc: Dict[str, Any]) -> Dict[str, Any]:
-    """What other users are allowed to see."""
+    """The FULL profile -- only for the owner and mutual connections."""
     return {
         "user_id": doc["user_id"],
         "name": doc["name"],
         "age": doc["age"],
         "bio": doc.get("bio", ""),
         "city": doc.get("city", ""),
+        "gender": doc.get("gender", ""),
+        "pseudonym": doc.get("pseudonym", ""),
+        "avatar": doc.get("avatar", {}),
         "proxy_mode": doc.get("proxy_mode", "mimic"),
+        "anonymous": False,
         "photos": list(doc.get("photos", [])),
         "transcript_visibility": bool(doc.get("transcript_visibility", False)),
         "profile_live": bool(doc.get("profile_live", False)),
@@ -183,7 +230,7 @@ class InMemoryUserStore:
     def list_live_profiles(self, exclude_user_id: str = "", limit: int = 50) -> List[Dict[str, Any]]:
         with self._lock:
             out = [
-                public_profile(d) for d in self._users.values()
+                anon_profile(d) for d in self._users.values()
                 if d.get("profile_live") and d["user_id"] != exclude_user_id
             ]
             return out[:limit]
@@ -323,4 +370,4 @@ class MongoUserStore:
             .sort("updated_at", -1)
             .limit(limit)
         )
-        return [public_profile(d) for d in cursor]
+        return [anon_profile(d) for d in cursor]

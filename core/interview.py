@@ -89,11 +89,13 @@ def run_interview_turn(
         state.messages.append({"role": "user", "content": user_message})
 
     asked = set(state.asked_ids)
-    fu_asked = set(state.follow_up_ids)
     prev_q = state.previous_question or ""
     prev_qid = state.previous_question_id or ""
 
-    followups = bank.followups(prev_qid, fu_asked) if prev_qid else []
+    # dynamic follow-ups: at most ONE per main question, crafted by the LLM
+    # to fit the user's actual answer (no predefined list). Not allowed on a
+    # skip or when there's no previous main to follow up on.
+    followup_allowed = bool(prev_qid) and len(state.follow_up_ids) == 0 and not skip
     next_main = bank.next_main(asked)
 
     if next_main is None:
@@ -110,7 +112,7 @@ def run_interview_turn(
         return _issue_structured(state, next_main, bank)
 
     system = get_interview_prompt(
-        next_main["main_question"], followups, prev_q, user_message
+        next_main["main_question"], followup_allowed, prev_q, user_message
     )
     messages = [{"role": "system", "content": system}] + [
         {"role": m["role"], "content": m["content"]} for m in state.messages
@@ -118,11 +120,10 @@ def run_interview_turn(
 
     parsed = llm.next_turn(model=model, messages=messages) or {}
     reply_text = parsed.get("response", "") or ""
-    need_followup = bool(parsed.get("need_followup", False))
-    follow_up_id = parsed.get("follow_up_id") or ""
+    need_followup = bool(parsed.get("need_followup", False)) and followup_allowed
 
-    if need_followup and follow_up_id:
-        state.follow_up_ids.append(follow_up_id)          # stay on same main
+    if need_followup:
+        state.follow_up_ids.append("dynamic")             # one per main, spent
     else:
         state.previous_question = next_main["main_question"]
         state.previous_question_id = next_main["id"]
@@ -134,7 +135,6 @@ def run_interview_turn(
         "content": reply_text,
         "metadata": {
             "need_followup": need_followup,
-            "follow_up_id": follow_up_id or None,
             "main_question_id": next_main["id"],
         },
     }

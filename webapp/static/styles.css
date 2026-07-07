@@ -212,3 +212,13 @@ details.collapsible summary::before {
 details.collapsible[open] summary::before { transform: rotate(90deg); }
 details.collapsible summary::-webkit-details-marker { display: none; }
 .review-item .js-answer { color: var(--ink-soft); margin: 0 0 8px; }
+
+/* ---------- anonymity & social ---------- */
+.ph.anon { background: var(--card); }
+.conn-row { display: flex; gap: 12px; align-items: center; padding: 10px 0;
+  border-top: 1px solid var(--line); flex-wrap: wrap; }
+.conn-row:first-of-type { border-top: 0; }
+.conn-ph { width: 48px; height: 48px; border-radius: 10px; object-fit: cover; }
+.swatch { width: 26px; height: 26px; border-radius: 7px; border: 2px solid transparent; cursor: pointer; }
+.swatch.sel { border-color: var(--ink); }
+.chip.sel-chip { background: var(--proxy); color: #FFF; }

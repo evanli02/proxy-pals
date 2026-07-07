@@ -48,6 +48,8 @@ class ProxyDefinition:
     samples: List[str]
     mode: str = "mimic"
     mbti: Optional[str] = None
+    age: Optional[int] = None
+    gender: Optional[str] = None
 
     def system_prompt(self) -> str:
         return build_system_prompt(
@@ -58,6 +60,8 @@ class ProxyDefinition:
             spc_context=self.spc_context,
             mode=self.mode,
             mbti=self.mbti,
+            age=self.age,
+            gender=self.gender,
         )
 
 
@@ -88,10 +92,20 @@ def _default_fetch_record(user_id: str) -> Optional[Dict[str, Any]]:
 def record_to_definition(
     user_id: str,
     record: Optional[Dict[str, Any]],
-    display_name: str,
+    identity: Any,
     mode: str = "mimic",
 ) -> ProxyDefinition:
-    """Map a raw training record into an immutable ProxyDefinition."""
+    """Map a raw training record into an immutable ProxyDefinition.
+
+    ``identity`` is either a display-name string (tests/legacy) or a dict
+    {"display_name": pseudonym, "age": int|None, "gender": str|None}. The
+    display name is the PSEUDONYM the stand-in speaks as."""
+    if isinstance(identity, dict):
+        display_name = identity.get("display_name") or user_id
+        age = identity.get("age")
+        gender = identity.get("gender")
+    else:
+        display_name, age, gender = (identity or user_id), None, None
     record = record or {}
     spc_raw = record.get("spc_raw", {})
     spc_context = spc_raw.get("context", {}) if isinstance(spc_raw, dict) else {}
@@ -104,6 +118,8 @@ def record_to_definition(
         samples=_extract_user_messages(record.get("messages", [])),
         mode=mode,
         mbti=record.get("mbti") or None,
+        age=age,
+        gender=gender,
     )
 
 

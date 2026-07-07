@@ -26,15 +26,15 @@ BANK = QuestionBank([
 
 
 class ScriptedLLM:
-    """need_followup is driven by whether the user said the magic word."""
+    """need_followup driven by a magic word; follow-ups are now DYNAMIC
+    (LLM-crafted), so no follow_up_id exists."""
 
     def next_turn(self, *, model, messages):
         last_user = messages[-1]["content"]
         if "followup-please" in last_user:
-            return {"response": "oh nice, what year are you in?",
-                    "need_followup": True, "follow_up_id": "F1a"}
-        return {"response": "got it! next question...",
-                "need_followup": False, "follow_up_id": None}
+            return {"response": "oh nice -- what got you into that?",
+                    "need_followup": True}
+        return {"response": "got it! next question...", "need_followup": False}
 
 
 def build_engine():
@@ -62,13 +62,13 @@ def test_main_questions_advance_in_order():
 def test_followup_stays_on_same_main():
     engine = build_engine()
     engine.respond(user_id="u2", text="hi")                       # Q1 asked
-    engine.respond(user_id="u2", text="followup-please")          # records F1a
+    engine.respond(user_id="u2", text="followup-please")          # dynamic follow-up
     state = engine.store.get_or_create("u2")
     assert state.asked_ids == ["Q1"], "follow-up must NOT advance the main"
-    assert state.follow_up_ids == ["F1a"]
-    # next non-followup turn advances to Q2 and clears follow-ups
-    engine.respond(user_id="u2", text="ok moving on")
-    assert state.asked_ids == ["Q1", "Q2"]
+    assert state.follow_up_ids == ["dynamic"]
+    # a SECOND follow-up on the same main is not allowed (max one)
+    engine.respond(user_id="u2", text="followup-please")
+    assert state.asked_ids == ["Q1", "Q2"], "second follow-up must be denied; main advances"
     assert state.follow_up_ids == []
 
 

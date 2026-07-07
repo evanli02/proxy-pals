@@ -52,7 +52,9 @@ from core.mongo_stores import (
 )
 from core.bio_suggestions import default_bio_generator
 from webapp.auth import hash_password, hash_token, mint_token, verify_password
+from webapp.social import MongoSocialStore
 from webapp.users import (
+    anon_profile,
     ALLOWED_PHOTO_TYPES,
     MAX_PHOTO_BYTES,
     MAX_PHOTOS,
@@ -95,8 +97,15 @@ class ProfilePatch(BaseModel):
     age: Optional[int] = Field(default=None, ge=18, le=120)
     bio: Optional[str] = Field(default=None, max_length=2000)
     city: Optional[str] = Field(default=None, max_length=80)
+    gender: Optional[str] = Field(default=None, max_length=40)
+    pseudonym: Optional[str] = Field(default=None, min_length=1, max_length=40)
+    avatar: Optional[Dict[str, str]] = None
     transcript_visibility: Optional[bool] = None
     proxy_mode: Optional[Literal["strict", "mimic", "free"]] = None
+
+
+class DmIn(BaseModel):
+    text: str = Field(min_length=1, max_length=4000)
 
 
 class ReviewAnswerIn(BaseModel):
@@ -142,12 +151,18 @@ def build_deps() -> Dict[str, Any]:
     """Default production wiring. Tests build their own with fakes."""
     users = MongoUserStore()
 
-    def resolve_display_name(user_id: str) -> str:
-        doc = users.get_by_id(user_id)
-        return (doc or {}).get("name") or user_id
+    def resolve_identity(user_id: str):
+        """The stand-in's speaking identity: PSEUDONYM (never the real name),
+        plus shareable age/gender per the anonymity rules."""
+        doc = users.get_by_id(user_id) or {}
+        return {
+            "display_name": doc.get("pseudonym") or "Anonymous",
+            "age": doc.get("age"),
+            "gender": doc.get("gender") or None,
+        }
 
     proxy = ProxyEngine(
-        definitions=ProxyDefinitionCache(resolve_name=resolve_display_name),
+        definitions=ProxyDefinitionCache(resolve_name=resolve_identity),
         sessions=MongoSessionStore(),
         retriever=default_retriever,
     )
@@ -167,6 +182,7 @@ def build_deps() -> Dict[str, Any]:
         "finalize_training": finalize_training,
         "review": MongoReviewStore(),
         "knowledge": MongoKnowledgeStore(),
+        "social": MongoSocialStore(),
         "bio_generator": default_bio_generator,
         "fetch_training_record": None,  # default: conversations lookup below
     }
@@ -181,6 +197,7 @@ def create_app(deps: Optional[Dict[str, Any]] = None) -> FastAPI:
     finalize_training = d.get("finalize_training") or (lambda state, bank: None)
     review = d.get("review")
     knowledge = d.get("knowledge")
+    social = d.get("social")
     bio_generator = d.get("bio_generator") or (lambda record: [])
 
     def _fetch_training_record(user_id: str):
@@ -254,6 +271,8 @@ def create_app(deps: Optional[Dict[str, Any]] = None) -> FastAPI:
         doc = users.update_profile(user_id, body.model_dump())
         if doc is None:
             raise HTTPException(status_code=404, detail="User not found")
+        # pseudonym/age/gender feed the stand-in's identity; refresh it
+        proxy.definitions.invalidate(user_id)
         return own_profile(doc)
 
     # --- photos ------------------------------------------------------------------------
@@ -308,7 +327,59 @@ def create_app(deps: Optional[Dict[str, Any]] = None) -> FastAPI:
         if target_id != user_id and not doc.get("profile_live"):
             # not browsable until the interview gate passes
             raise HTTPException(status_code=404, detail="User not found")
-        return public_profile(doc)
+        if target_id == user_id or (social and social.connected(user_id, target_id)):
+            p = public_profile(doc)          # full: owner or mutual connection
+        else:
+            p = anon_profile(doc)            # stranger: pseudonym + avatar only
+        if social and target_id != user_id:
+            p["you_liked"] = social.liked(user_id, target_id)
+            p["likes_you"] = social.liked(target_id, user_id)
+            p["connected"] = social.connected(user_id, target_id)
+        return p
+
+    # --- likes / connections / DMs -------------------------------------------
+
+    @app.post("/api/likes/{target_id}")
+    def send_like(target_id: str, user_id: str = Depends(get_current_user)):
+        target = users.get_by_id(target_id)
+        if target is None or not target.get("profile_live"):
+            raise HTTPException(status_code=404, detail="User not found")
+        try:
+            mutual = social.like(user_id, target_id)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="You can't like yourself")
+        return {"mutual": mutual}
+
+    @app.get("/api/connections")
+    def connections(user_id: str = Depends(get_current_user)):
+        """Connections (full profiles) + incoming likes (anonymous)."""
+        conns, incoming = [], []
+        for uid in social.connections_of(user_id):
+            doc = users.get_by_id(uid)
+            if doc:
+                conns.append(public_profile(doc))
+        for uid in social.incoming_likes(user_id):
+            doc = users.get_by_id(uid)
+            if doc:
+                a = anon_profile(doc)
+                a["you_liked"] = social.liked(user_id, uid)
+                incoming.append(a)
+        return {"connections": conns, "incoming": incoming}
+
+    @app.post("/api/messages/{peer_id}")
+    def send_message(peer_id: str, body: DmIn,
+                     user_id: str = Depends(get_current_user)):
+        if not social.connected(user_id, peer_id):
+            raise HTTPException(status_code=403,
+                                detail="You can only message mutual connections")
+        return social.send_dm(user_id, peer_id, body.text)
+
+    @app.get("/api/messages/{peer_id}")
+    def get_messages(peer_id: str, user_id: str = Depends(get_current_user)):
+        if not social.connected(user_id, peer_id):
+            raise HTTPException(status_code=403,
+                                detail="You can only message mutual connections")
+        return {"messages": social.get_dms(user_id, peer_id)}
 
     # --- interview (onboarding) -------------------------------------------------------
 

@@ -29,6 +29,35 @@ function toast(msg) {
   t.textContent = msg; t.hidden = false;
   clearTimeout(t._timer); t._timer = setTimeout(() => (t.hidden = true), 3200);
 }
+/* ---------- avatar renderer (Mii-ish blob) ---------- */
+const EYES = {
+  dot: '<circle cx="38" cy="46" r="4" fill="#20241D"/><circle cx="62" cy="46" r="4" fill="#20241D"/>',
+  happy: '<path d="M32 46 q6 -8 12 0 M56 46 q6 -8 12 0" stroke="#20241D" stroke-width="3" fill="none" stroke-linecap="round"/>',
+  star: '<text x="32" y="52" font-size="14">✦</text><text x="56" y="52" font-size="14">✦</text>',
+  sleepy: '<path d="M32 46 q6 5 12 0 M56 46 q6 5 12 0" stroke="#20241D" stroke-width="3" fill="none" stroke-linecap="round"/>',
+};
+const MOUTH = {
+  smile: '<path d="M40 62 q10 10 20 0" stroke="#20241D" stroke-width="3" fill="none" stroke-linecap="round"/>',
+  open: '<ellipse cx="50" cy="64" rx="7" ry="9" fill="#20241D"/>',
+  flat: '<path d="M42 64 h16" stroke="#20241D" stroke-width="3" stroke-linecap="round"/>',
+  cat: '<path d="M40 62 q5 7 10 0 q5 7 10 0" stroke="#20241D" stroke-width="3" fill="none" stroke-linecap="round"/>',
+};
+const ACC = {
+  none: "",
+  sprout: '<path d="M50 16 q0 -10 8 -12 M50 16 q0 -8 -8 -10" stroke="#2F5D50" stroke-width="3" fill="none" stroke-linecap="round"/>',
+  halo: '<ellipse cx="50" cy="10" rx="16" ry="5" fill="none" stroke="#C77E3C" stroke-width="3"/>',
+  antenna: '<path d="M50 18 v-10" stroke="#20241D" stroke-width="3" stroke-linecap="round"/><circle cx="50" cy="6" r="4" fill="#C77E3C"/>',
+  bow: '<path d="M50 14 l-10 -6 v12 z M50 14 l10 -6 v12 z" fill="#A3524B"/>',
+};
+function avatarSVG(av, size = 72) {
+  const a = av || {};
+  return `<svg width="${size}" height="${size}" viewBox="0 0 100 100" role="img" aria-label="avatar">
+    <rect width="100" height="100" rx="18" fill="${esc(a.bg || "#DFE9E4")}"/>
+    <ellipse cx="50" cy="58" rx="30" ry="32" fill="${esc(a.body || "#2F5D50")}"/>
+    ${EYES[a.eyes] || EYES.dot}${MOUTH[a.mouth] || MOUTH.smile}${ACC[a.acc] || ""}
+  </svg>`;
+}
+
 function el(html) { const d = document.createElement("div"); d.innerHTML = html.trim(); return d.firstElementChild; }
 function esc(s) { return String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])); }
 
@@ -37,7 +66,9 @@ function nav(hash) { location.hash = hash; }
 window.addEventListener("hashchange", render);
 $("#signout").addEventListener("click", () => { store.token = null; store.userId = null; nav("#/auth"); });
 
+let dmPoll = null;
 async function render() {
+  clearInterval(dmPoll); dmPoll = null;
   const hash = location.hash || "#/browse";
   if (!store.token && hash !== "#/auth") return nav("#/auth");
   topbar.hidden = !store.token;
@@ -48,6 +79,8 @@ async function render() {
     if (hash === "#/auth") return renderAuth();
     if (hash === "#/interview") return renderInterview();
     if (hash === "#/me") return renderMe();
+    if (hash === "#/connections") return renderConnections();
+    if (hash.startsWith("#/dm/")) return renderDm(hash.split("/")[2]);
     if (hash.startsWith("#/profile/")) return renderProfile(hash.split("/")[2]);
     return renderBrowse();
   } catch (e) { view.appendChild(el(`<p class="err">${esc(e.message)}</p>`)); }
@@ -298,7 +331,21 @@ async function renderMe() {
     </div>
 
     <div class="card">
-      <label class="fld">Name</label>
+      <b>Your standin's identity</b>
+      <p class="hint">This is all strangers see until you mutually connect.</p>
+      <div class="row" style="align-items:center;gap:14px">
+        <div id="me-avatar">${avatarSVG(me.avatar, 84)}</div>
+        <button class="btn btn-quiet" id="me-av-random" type="button">🎲 Randomize</button>
+      </div>
+      <div id="me-av-opts"></div>
+      <label class="fld">Pseudonym</label>
+      <input type="text" id="me-pseud" value="${esc(me.pseudonym)}" maxlength="40">
+      <label class="fld">Gender <span class="hint">(your standin may share this; leave blank to keep private)</span></label>
+      <input type="text" id="me-gender" value="${esc(me.gender || "")}" placeholder="e.g. male, female, nonbinary">
+    </div>
+
+    <div class="card">
+      <label class="fld">Name <span class="hint">(shown only to mutual connections)</span></label>
       <input type="text" id="me-name" value="${esc(me.name)}">
       <label class="fld">City</label>
       <input type="text" id="me-city" value="${esc(me.city)}" placeholder="e.g. Ithaca, NY">
@@ -372,6 +419,41 @@ async function renderMe() {
       const fresh = await api("/api/users/me"); paintPhotos(fresh.photos);
     } catch (e) { toast(e.message); }
     file.value = "";
+  });
+
+  /* avatar builder */
+  const AV_OPTS = {
+    bg: ["#DFE9E4", "#F4E6D5", "#E4E0F0", "#F0E4E4", "#E0EDF0", "#EFEBD8"],
+    body: ["#2F5D50", "#C77E3C", "#6B5B9E", "#A3524B", "#3F7D8C", "#8C7B3F"],
+    eyes: ["dot", "happy", "star", "sleepy"],
+    mouth: ["smile", "open", "flat", "cat"],
+    acc: ["none", "sprout", "halo", "antenna", "bow"],
+  };
+  let av = Object.assign({ bg: "#DFE9E4", body: "#2F5D50", eyes: "dot", mouth: "smile", acc: "none" }, me.avatar || {});
+  function paintAvatar() {
+    $("#me-avatar", root).innerHTML = avatarSVG(av, 84);
+    const host = $("#me-av-opts", root); host.innerHTML = "";
+    [["eyes", "Eyes"], ["mouth", "Mouth"], ["acc", "Extra"], ["body", "Color"], ["bg", "Backdrop"]].forEach(([k, label]) => {
+      const row = el(`<div class="row" style="margin-top:8px"><span class="mono" style="width:76px">${label}</span></div>`);
+      AV_OPTS[k].forEach(v => {
+        const isColor = v.startsWith("#");
+        const b = el(isColor
+          ? `<button type="button" class="swatch ${av[k] === v ? "sel" : ""}" style="background:${v}" aria-label="${v}"></button>`
+          : `<button type="button" class="chip ${av[k] === v ? "sel-chip" : ""}">${v}</button>`);
+        b.addEventListener("click", async () => {
+          av[k] = v; paintAvatar();
+          try { await api("/api/users/me", { method: "PATCH", body: { avatar: av } }); } catch (e) { toast(e.message); }
+        });
+        row.appendChild(b);
+      });
+      host.appendChild(row);
+    });
+  }
+  paintAvatar();
+  $("#me-av-random", root).addEventListener("click", async () => {
+    Object.keys(AV_OPTS).forEach(k => av[k] = AV_OPTS[k][Math.floor(Math.random() * AV_OPTS[k].length)]);
+    paintAvatar();
+    try { await api("/api/users/me", { method: "PATCH", body: { avatar: av } }); } catch (e) { toast(e.message); }
   });
 
   /* bio suggestions */
@@ -502,6 +584,8 @@ async function renderMe() {
     try {
       await api("/api/users/me", { method: "PATCH", body: {
         name: $("#me-name", root).value.trim() || null,
+        pseudonym: $("#me-pseud", root).value.trim() || null,
+        gender: $("#me-gender", root).value.trim(),
         city: $("#me-city", root).value.trim(),
         bio: $("#me-bio", root).value,
         transcript_visibility: $("#me-vis", root).checked } });
@@ -510,24 +594,24 @@ async function renderMe() {
   });
 }
 
-/* ================= BROWSE ================= */
+/* ================= BROWSE (anonymous) ================= */
 async function renderBrowse() {
   const { profiles } = await api("/api/users");
   const root = el(`<div>
-    <h1 class="screen-title">People</h1>
-    <p class="screen-sub">Open a profile to chat with their standin first.</p>
+    <h1 class="screen-title">Standins</h1>
+    <p class="screen-sub">Everyone here is anonymous — you meet the standin first. If the conversation clicks, send a like.</p>
     <div class="grid" id="b-grid"></div>
   </div>`);
   view.appendChild(root);
   const grid = $("#b-grid", root);
   if (!profiles.length) {
-    grid.replaceWith(el(`<div class="card">No live profiles yet. Once others finish training, they'll show up here — share the link around.</div>`));
+    grid.replaceWith(el(`<div class="card">No live standins yet. Once others finish training, they'll show up here.</div>`));
     return;
   }
   profiles.forEach(p => {
     const c = el(`<div class="card profile-card" role="button" tabindex="0">
-      <div class="ph">${p.photos.length ? `<img src="/api/photos/${p.photos[0]}" alt="">` : `<span class="initial">${esc(p.name[0] || "?")}</span>`}</div>
-      <div class="meta"><b>${esc(p.name)}</b>, ${p.age}${p.city ? " · " + esc(p.city) : ""}<br><span class="hint">${esc((p.bio || "").slice(0, 64))}</span></div>
+      <div class="ph anon">${avatarSVG(p.avatar, 110)}</div>
+      <div class="meta"><b>${esc(p.pseudonym)}</b><br><span class="hint mono">standin</span></div>
     </div>`);
     const open = () => nav(`#/profile/${p.user_id}`);
     c.addEventListener("click", open);
@@ -541,21 +625,55 @@ const convs = {}; // target_id -> conversation_id (session-scoped)
 async function renderProfile(targetId) {
   const p = await api(`/api/users/${targetId}`);
   const isSelf = targetId === store.userId;
+  const anon = p.anonymous && !isSelf;
+
+  const header = anon
+    ? `<div class="row" style="align-items:center;gap:14px;margin-top:18px">
+         ${avatarSVG(p.avatar, 84)}
+         <div><h1 class="screen-title" style="margin:0">${esc(p.pseudonym)}</h1>
+         <span class="hint mono">anonymous standin</span></div>
+       </div>
+       <p class="screen-sub" style="margin-top:10px">You'll see their real profile if you both like each other.</p>`
+    : `<div class="row" style="align-items:center;gap:14px;margin-top:18px">
+         ${avatarSVG(p.avatar, 64)}
+         <div><h1 class="screen-title" style="margin:0">${esc(p.name)}<span class="hint">, ${p.age}${p.city ? " · " + esc(p.city) : ""}</span></h1>
+         <span class="hint">standin: ${esc(p.pseudonym)}</span></div>
+       </div>
+       ${p.bio ? `<p class="screen-sub" style="margin-top:10px">${esc(p.bio)}</p>` : ""}
+       ${(!isSelf && p.photos) ? `<div class="gallery">${p.photos.map(pid => `<img src="/api/photos/${pid}" alt="">`).join("")}</div>` : ""}`;
+
+  const likeBar = isSelf ? "" : p.connected
+    ? `<div class="row" style="margin:6px 0 12px"><span class="badge" style="background:var(--you-soft);color:var(--you);border-color:var(--you)">connected</span>
+       <a class="btn btn-primary" href="#/dm/${targetId}">Message ${esc(p.name || p.pseudonym)}</a></div>`
+    : `<div class="row" style="margin:6px 0 12px">
+       ${p.likes_you ? `<span class="badge">liked your standin</span>` : ""}
+       <button class="btn ${p.you_liked ? "btn-quiet" : "btn-primary"}" id="p-like" ${p.you_liked ? "disabled" : ""}>
+         ${p.you_liked ? "Liked ✓ — waiting for them" : (p.likes_you ? "Like back to connect" : "Send like")}
+       </button></div>`;
+
   const root = el(`<div>
-    <h1 class="screen-title">${esc(p.name)}<span class="hint">, ${p.age}${p.city ? " · " + esc(p.city) : ""}</span></h1>
-    ${p.bio ? `<p class="screen-sub">${esc(p.bio)}</p>` : ""}
-    <div class="gallery">${p.photos.map(pid => `<img src="/api/photos/${pid}" alt="">`).join("")}</div>
+    ${header}
+    ${likeBar}
     ${isSelf ? `<div class="notice">This is your own standin — what you hear is what others hear.</div>` : ""}
-    ${!isSelf && p.transcript_visibility ? `<div class="row" style="margin-bottom:8px"><span class="badge">reviews standin chats</span><span class="hint">${esc(p.name)} can read this conversation.</span></div>` : ""}
+    ${!isSelf && p.transcript_visibility ? `<div class="row" style="margin-bottom:8px"><span class="badge">reviews standin chats</span><span class="hint">They can read this conversation.</span></div>` : ""}
     <div class="chat" id="p-chat"></div>
     <form class="composer" id="p-form">
-      <input type="text" id="p-input" placeholder="Say something to ${esc(p.name)}'s standin" autocomplete="off">
+      <input type="text" id="p-input" placeholder="Say something to ${esc(p.pseudonym || p.name)}" autocomplete="off">
       <button class="btn btn-primary">Send</button>
     </form>
   </div>`);
   view.appendChild(root);
   const chat = $("#p-chat", root), form = $("#p-form", root), input = $("#p-input", root);
-  chat.appendChild(el(`<div class="speaker">STANDIN · SPEAKS AS ${esc(p.name.toUpperCase())}</div>`));
+  chat.appendChild(el(`<div class="speaker">STANDIN · ${esc((p.pseudonym || "").toUpperCase())}</div>`));
+
+  const likeBtn = $("#p-like", root);
+  if (likeBtn) likeBtn.addEventListener("click", async () => {
+    try {
+      const out = await api(`/api/likes/${targetId}`, { method: "POST" });
+      if (out.mutual) { toast("It's mutual! Profiles unlocked."); render(); }
+      else { likeBtn.disabled = true; likeBtn.textContent = "Liked ✓ — waiting for them"; likeBtn.classList.replace("btn-primary", "btn-quiet"); }
+    } catch (e) { toast(e.message); }
+  });
 
   const sendBtn = $("button", form);
   form.addEventListener("submit", async ev => {
@@ -573,6 +691,94 @@ async function renderProfile(targetId) {
       chat.appendChild(el(`<div class="msg bot proxy">${esc(out.reply)}</div>`));
       chat.lastElementChild.scrollIntoView({ block: "end" });
     } catch (e) { t.remove(); toast(e.message); }
+    input.disabled = false; sendBtn.disabled = false; input.focus();
+  });
+}
+
+/* ================= CONNECTIONS ================= */
+async function renderConnections() {
+  const { connections, incoming } = await api("/api/connections");
+  const root = el(`<div>
+    <h1 class="screen-title">Connections</h1>
+    <p class="screen-sub">Mutual likes unlock full profiles and direct messages.</p>
+    <div class="card"><b>Liked your standin</b>
+      <div id="c-incoming"></div></div>
+    <div class="card"><b>Your connections</b>
+      <div id="c-conns"></div></div>
+  </div>`);
+  view.appendChild(root);
+
+  const inc = $("#c-incoming", root);
+  if (!incoming.length) inc.appendChild(el(`<p class="hint">No incoming likes yet.</p>`));
+  incoming.forEach(a => {
+    const rowEl = el(`<div class="conn-row">
+      ${avatarSVG(a.avatar, 48)}
+      <div style="flex:1"><b>${esc(a.pseudonym)}</b><br><span class="hint mono">anonymous until mutual</span></div>
+      <a class="btn btn-quiet" href="#/profile/${a.user_id}">Chat with their standin</a>
+      <button class="btn btn-primary js-likeback">${a.you_liked ? "Liked ✓" : "Like back"}</button>
+    </div>`);
+    const b = $(".js-likeback", rowEl);
+    if (a.you_liked) b.disabled = true;
+    b.addEventListener("click", async () => {
+      try {
+        const out = await api(`/api/likes/${a.user_id}`, { method: "POST" });
+        if (out.mutual) { toast("It's mutual! Profiles unlocked."); render(); }
+      } catch (e) { toast(e.message); }
+    });
+    inc.appendChild(rowEl);
+  });
+
+  const cc = $("#c-conns", root);
+  if (!connections.length) cc.appendChild(el(`<p class="hint">No connections yet — chat with standins in Browse and send likes.</p>`));
+  connections.forEach(c => {
+    const rowEl = el(`<div class="conn-row">
+      ${c.photos && c.photos.length ? `<img class="conn-ph" src="/api/photos/${c.photos[0]}" alt="">` : avatarSVG(c.avatar, 48)}
+      <div style="flex:1"><b>${esc(c.name)}</b>, ${c.age}${c.city ? " · " + esc(c.city) : ""}<br>
+        <span class="hint">${esc((c.bio || "").slice(0, 60))}</span></div>
+      <a class="btn btn-quiet" href="#/profile/${c.user_id}">Profile</a>
+      <a class="btn btn-primary" href="#/dm/${c.user_id}">Message</a>
+    </div>`);
+    cc.appendChild(rowEl);
+  });
+}
+
+/* ================= DIRECT MESSAGES ================= */
+async function renderDm(peerId) {
+  const p = await api(`/api/users/${peerId}`);
+  const root = el(`<div>
+    <h1 class="screen-title">${esc(p.name || p.pseudonym)}</h1>
+    <p class="screen-sub">Direct messages — this is the real ${esc(p.name || "them")}, not their standin.</p>
+    <div class="chat" id="d-chat"></div>
+    <form class="composer" id="d-form">
+      <input type="text" id="d-input" placeholder="Message ${esc(p.name || p.pseudonym)}" autocomplete="off">
+      <button class="btn btn-primary">Send</button>
+    </form>
+  </div>`);
+  view.appendChild(root);
+  const chat = $("#d-chat", root), form = $("#d-form", root), input = $("#d-input", root);
+
+  let count = 0;
+  async function refresh() {
+    try {
+      const { messages } = await api(`/api/messages/${peerId}`);
+      if (messages.length === count) return;
+      count = messages.length;
+      chat.innerHTML = "";
+      messages.forEach(m => chat.appendChild(
+        el(`<div class="msg ${m.from === store.userId ? "you" : "bot"}">${esc(m.text)}</div>`)));
+      if (chat.lastElementChild) chat.lastElementChild.scrollIntoView({ block: "end" });
+    } catch (e) { /* connection may have been revoked; stay quiet */ }
+  }
+  await refresh();
+  dmPoll = setInterval(refresh, 4000);
+
+  const sendBtn = $("button", form);
+  form.addEventListener("submit", async ev => {
+    ev.preventDefault();
+    const text = input.value.trim(); if (!text || input.disabled) return;
+    input.value = ""; input.disabled = true; sendBtn.disabled = true;
+    try { await api(`/api/messages/${peerId}`, { method: "POST", body: { text } }); await refresh(); }
+    catch (e) { toast(e.message); }
     input.disabled = false; sendBtn.disabled = false; input.focus();
   });
 }

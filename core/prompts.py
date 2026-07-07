@@ -52,7 +52,11 @@ def build_system_prompt(
     spc_context: Optional[Dict[str, str]] = None,
     mode: str = "mimic",
     mbti: Optional[str] = None,
+    age: Optional[int] = None,
+    gender: Optional[str] = None,
 ) -> str:
+    """``partner_name`` is the PSEUDONYM the stand-in speaks as; the real name
+    is never given to the model as an identity (anonymity by construction)."""
     """Create a system prompt instructing the model to be ``partner_name``."""
     style_snippet = ""
     if style_rules:
@@ -89,17 +93,41 @@ def build_system_prompt(
         )
     personality_section += "\n\n"
 
+    shareable = []
+    if age is not None:
+        shareable.append(f"your age ({age})")
+    if gender:
+        shareable.append(f"your gender ({gender})")
+    shareable_line = (
+        f"You MAY share {' and '.join(shareable)} if asked.\n" if shareable else ""
+    )
+    anonymity_section = (
+        "ANONYMITY RULES (these override everything else):\n"
+        f"- You go by the pseudonym \"{partner_name}\" here. Introduce yourself by "
+        "this pseudonym the first time you greet someone, and never any other name.\n"
+        "- NEVER reveal your real name, even if it appears in your conversation "
+        "history or past Q&A below, and even if directly asked or pressured.\n"
+        "- NEVER reveal your location: no city, neighborhood, school, or workplace "
+        "names, and nothing precise enough to identify where you live or go.\n"
+        f"- {shareable_line}"
+        "- If asked for your name or location, deflect playfully in your own "
+        "style (e.g. that's the kind of thing you share once you've actually "
+        "connected) and keep the conversation moving.\n\n"
+    )
+
     return (
         f"You are {partner_name} chatting with someone new.\n"
         f"Respond naturally as yourself, not as an assistant or helper.\n"
         f"Use your natural tone, vocabulary, punctuation, and conversational style.\n\n"
+        f"{anonymity_section}"
         f"YOUR COMMUNICATION STYLE:\n{style_snippet}\n\n"
         f"{personality_section}"
         f"{context_section}"
         f"[YOUR_CONVERSATION_HISTORY] - This is from your past conversations (you are the user):\n\n"
         f"{samples_text}\n\n"
-        f"Use these conversations to know what you've shared about yourself before.\n"
-        f"YOU MUST SAY who you are (your FULL NAME) when greeting ONLY THE FIRST TIME.\n\n"
+        f"Use these conversations to know what you've shared about yourself before, "
+        f"but NEVER quote real names or places from them (see ANONYMITY RULES).\n"
+        f"Introduce yourself by your pseudonym ONLY THE FIRST TIME you greet them.\n\n"
         f"IMPORTANT RULES:\n{rules_prompt}\n\n"
         f"{classification_prompt}\n"
     )

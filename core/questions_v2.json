@@ -1,139 +1,38 @@
 [
   {
-    "id": "Q_GENDER",
+    "id": "P1",
     "type": "free_text",
-    "main_question": "What's your gender?",
-    "followups": []
+    "main_question": "What do you like most about yourself?"
   },
   {
-    "id": "Q_PRONOUNS",
+    "id": "P2",
     "type": "free_text",
-    "main_question": "What pronouns do you use?",
-    "followups": []
+    "main_question": "If you were given an unlimited amount of money, what is the very first thing you would purchase for yourself before anyone finds out?"
   },
   {
-    "id": "Q_FAMILY",
+    "id": "P3",
     "type": "free_text",
-    "main_question": "Tell me about your family?",
-    "followups": []
+    "main_question": "What is a trait in someone that makes you instantly platonically or romantically attracted to them?"
   },
   {
-    "id": "Q_FROM",
+    "id": "P4",
     "type": "free_text",
-    "main_question": "Where are you from?",
-    "followups": []
+    "main_question": "What's something you wish you had in your life right now?"
   },
   {
-    "id": "Q_PETS",
+    "id": "P5",
     "type": "free_text",
-    "main_question": "Do you have any pets?",
-    "followups": [
-      {
-        "id": "Q_PETS_F1",
-        "question": "Tell me more about them?",
-        "when": "they said they DO have pets, and haven't already described them"
-      },
-      {
-        "id": "Q_PETS_F2",
-        "question": "Do you want pets?",
-        "when": "they said they do NOT have pets, and haven't already said whether they want any"
-      }
-    ]
+    "main_question": "What is your guilty pleasure?"
   },
   {
-    "id": "Q_LIVE",
+    "id": "P6",
     "type": "free_text",
-    "main_question": "Where do you currently live?",
-    "followups": [
-      {
-        "id": "Q_LIVE_F1",
-        "question": "Do you like it there? Why or why not?",
-        "when": "they haven't already shared how they feel about living there"
-      },
-      {
-        "id": "Q_LIVE_F2",
-        "question": "If you could live anywhere else, where would it be?",
-        "when": "they haven't already mentioned somewhere they'd rather live"
-      }
-    ]
+    "main_question": "What's something that makes you easily upset?"
   },
   {
-    "id": "Q_JOB",
+    "id": "P7",
     "type": "free_text",
-    "main_question": "What's your current occupation?",
-    "followups": [
-      {
-        "id": "Q_JOB_F1",
-        "question": "Do you like what you do or do you see yourself doing something different in the future?",
-        "when": "they haven't already shared how they feel about their work or future plans"
-      }
-    ]
-  },
-  {
-    "id": "Q_FREETIME",
-    "type": "free_text",
-    "main_question": "What do you like to do in your free time?",
-    "followups": []
-  },
-  {
-    "id": "Q_SPORTS_PLAY",
-    "type": "free_text",
-    "main_question": "Do you play any sports?",
-    "followups": []
-  },
-  {
-    "id": "Q_SPORTS_WATCH",
-    "type": "free_text",
-    "main_question": "Do you have any favorite sports/teams you like to watch?",
-    "followups": []
-  },
-  {
-    "id": "Q_MEDIA",
-    "type": "free_text",
-    "main_question": "Any favorite movies/TV shows/books? Why are they your favorites?",
-    "followups": []
-  },
-  {
-    "id": "Q_MUSIC",
-    "type": "free_text",
-    "main_question": "Tell me about your music taste, what genres do you listen to and who are your favorite artists?",
-    "followups": []
-  },
-  {
-    "id": "Q_FOOD",
-    "type": "free_text",
-    "main_question": "What's your favorite type of cuisine? Favorite dish to order?",
-    "followups": []
-  },
-  {
-    "id": "Q_TRAVEL",
-    "type": "free_text",
-    "main_question": "Tell me about the best place you've ever traveled to?",
-    "followups": []
-  },
-  {
-    "id": "Q_BUCKET",
-    "type": "free_text",
-    "main_question": "What's something on your bucket list?",
-    "followups": []
-  },
-  {
-    "id": "Q_GREENFLAG",
-    "type": "free_text",
-    "main_question": "What's a green flag you look for in friends?",
-    "followups": []
-  },
-  {
-    "id": "Q_ROLEMODEL",
-    "type": "free_text",
-    "main_question": "Who is your role model? Why? If you don't have one, why not?",
-    "followups": []
-  },
-  {
-    "id": "Q_DREAM",
-    "type": "free_text",
-    "main_question": "What does your dream job/life look like?",
-    "followups": []
+    "main_question": "Do you tend to spend your free time relaxing or being productive?"
   },
   {
     "id": "SPC_TIPI",
@@ -350,7 +249,6 @@
     "id": "Q_ANYTHING_ELSE",
     "type": "free_text",
     "decompose_to_qa": true,
-    "main_question": "Anything else you want me to know about you?",
-    "followups": []
+    "main_question": "Anything else you want me to know about you?"
   }
 ]

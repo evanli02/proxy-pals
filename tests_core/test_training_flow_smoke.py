@@ -60,7 +60,7 @@ def run_full_interview(engine, uid="alice", mbti="INTP", anything_else=None):
 
 
 def test_bank_shape():
-    assert BANK.main_count() == 26
+    assert BANK.main_count() == 15
     assert BANK.is_structured("SPC_TIPI") and BANK.is_structured("SPC_MBTI")
     assert not BANK.is_structured("Q_PETS")
     p = BANK.payload("SPC_TIPI")
@@ -91,7 +91,7 @@ def test_structured_flow_and_completion():
     r = run_full_interview(engine)
     assert r.complete and r.profile_ready
     state = engine.store.get_or_create("alice")
-    assert len(state.asked_ids) == 26
+    assert len(state.asked_ids) == 15
     assert state.structured_answers["SPC_MBTI"] == "INTP"
     # batteries chained: PVQ card was issued directly after TIPI submission
     assert "SPC_TIPI" in state.asked_ids and "SPC_PVQ" in state.asked_ids
@@ -271,24 +271,17 @@ def test_rag_context_injected_into_proxy_prompt():
 
 
 
-def test_interview_prompt_conditional_followups():
+def test_interview_prompt_dynamic_followups():
     from core import get_interview_prompt, question_bank_v2
     bank = question_bank_v2()
-    # gender and pronouns are now separate questions
-    assert bank.get("Q_GENDER") and bank.get("Q_PRONOUNS")
-    assert "gender" in bank.get("Q_GENDER")["main_question"].lower()
-    assert "pronouns" in bank.get("Q_PRONOUNS")["main_question"].lower()
+    assert bank.get("P1") and "like most about yourself" in bank.get("P1")["main_question"]
+    assert bank.get("SPC_TIPI") and bank.get("Q_ANYTHING_ELSE")
+    p_yes = get_interview_prompt("Next Q?", True, "Prev Q?", "i play saxophone")
+    p_no = get_interview_prompt("Next Q?", False, "Prev Q?", "ok")
+    assert "[FOLLOWUP_ALLOWED]\nyes" in p_yes and "[FOLLOWUP_ALLOWED]\nno" in p_no
+    assert "tailored to the exact thing they said" in p_yes
+    assert "AT MOST ONE" in p_yes.upper() or "at most ONE" in p_yes
 
-    fus = bank.followups("Q_PETS", set())
-    prompt = get_interview_prompt("Do you have any pets?", fus, "Where are you from?", "i have a corgi!")
-    # conditions are rendered next to each follow-up
-    assert "ask only if: they said they DO have pets" in prompt
-    assert "ask only if: they said they do NOT have pets" in prompt
-    # hard rules present
-    assert "NEVER ask a follow-up whose answer the user has ALREADY given" in prompt
-    assert "NOT A CHECKLIST" in prompt
-    # empty followups don't blow up
-    assert "(none available)" in get_interview_prompt("Q?", [], "", "hi")
 
 if __name__ == "__main__":
     test_bank_shape()
@@ -299,5 +292,5 @@ if __name__ == "__main__":
     test_compiler_and_mbti_injection()
     test_api_structured_round_trip()
     test_rag_context_injected_into_proxy_prompt()
-    test_interview_prompt_conditional_followups()
+    test_interview_prompt_dynamic_followups()
     print("OK - all training-flow smoke tests passed")
