@@ -57,6 +57,11 @@ INTERVIEW_PROMPT = dedent(
     interviewer, then continue with your question.
   - If NEXT_MAIN_QUESTION is "(none)" and FOLLOWUP_ALLOWED is no:
     need_followup=false and give a warm one-line send-off with no question.
+  - If NEXT_MAIN_QUESTION is "(none)" and FOLLOWUP_ALLOWED is yes: a survey
+    section comes next. Ask ONE tailored follow-up ONLY if the user's last
+    answer has a genuinely interesting thread (need_followup=true); otherwise
+    need_followup=false with an empty "response" (it will not be shown) and
+    the survey will begin.
 
   [PREVIOUS_ASKED_MAIN_QUESTION]
   {PREVIOUS_MAIN}

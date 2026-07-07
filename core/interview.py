@@ -94,8 +94,15 @@ def run_interview_turn(
 
     # dynamic follow-ups: at most ONE per main question, crafted by the LLM
     # to fit the user's actual answer (no predefined list). Not allowed on a
-    # skip or when there's no previous main to follow up on.
-    followup_allowed = bool(prev_qid) and len(state.follow_up_ids) == 0 and not skip
+    # skip, when there's no previous main, or -- crucially -- when the previous
+    # question was a STRUCTURED survey item (follow-ups are for conversation,
+    # not for probing someone's Likert ratings or routine write-ups).
+    followup_allowed = (
+        bool(prev_qid)
+        and not bank.is_structured(prev_qid)
+        and len(state.follow_up_ids) == 0
+        and not skip
+    )
     next_main = bank.next_main(asked)
 
     if next_main is None:
@@ -105,6 +112,30 @@ def run_interview_turn(
         )
 
     if bank.is_structured(next_main["id"]):
+        # A survey section is next -- but the answer the user JUST gave (to a
+        # free-text question) still deserves its one follow-up chance. Ask the
+        # LLM with no next-main on offer: either it crafts a tailored
+        # follow-up, or we proceed straight to the survey card.
+        if followup_allowed:
+            system = get_interview_prompt(None, True, prev_q, user_message)
+            messages = [{"role": "system", "content": system}] + [
+                {"role": m["role"], "content": m["content"]} for m in state.messages
+            ]
+            parsed = llm.next_turn(model=model, messages=messages) or {}
+            fu_text = (parsed.get("response") or "").strip()
+            if parsed.get("need_followup") and fu_text:
+                state.follow_up_ids.append("dynamic")
+                assistant_message = {
+                    "role": "assistant",
+                    "content": fu_text,
+                    "metadata": {"need_followup": True,
+                                 "main_question_id": prev_qid},
+                }
+                state.messages.append(assistant_message)
+                return InterviewTurnResult(
+                    reply_text=fu_text, complete=False, profile_ready=False,
+                    assistant_message=assistant_message,
+                )
         # Structured questions bypass the LLM entirely: the UI renders the
         # card (Qualtrics-style matrix for batteries) and answers come back
         # through submit_structured_answer. This is what keeps validated

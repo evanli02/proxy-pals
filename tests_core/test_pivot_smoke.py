@@ -178,6 +178,73 @@ def test_dynamic_followup_max_one_per_main():
     assert state.follow_up_ids == []
 
 
+
+def _boundary_bank():
+    return QuestionBank([
+        {"id": "P7", "main_question": "Relaxing or productive?", "followups": []},
+        {"id": "S1", "type": "choice", "main_question": "Pick one", "options": ["A", "B"]},
+        {"id": "QF", "main_question": "Anything else?", "followups": []},
+    ])
+
+
+def test_followup_chance_before_survey():
+    """BUG 1: answering the last free-text question before the survey must
+    still get its one follow-up chance -- not jump straight to the card."""
+    class EagerFollowupLLM:
+        def next_turn(self, *, model, messages):
+            return {"response": "productive HOW though?", "need_followup": True}
+
+    engine = InterviewEngine(bank=_boundary_bank(),
+                             store=InMemoryInterviewStore(),
+                             llm=EagerFollowupLLM(), model="f")
+    engine.respond(user_id="u", text="hi")                     # asks P7
+    r = engine.respond(user_id="u", text="productive i guess")  # answer P7
+    assert r.question_payload is None, "must not jump straight to the survey"
+    assert r.reply_text == "productive HOW though?"
+    state = engine.store.get_or_create("u")
+    assert state.follow_up_ids == ["dynamic"] and state.asked_ids == ["P7"]
+    # answering the follow-up: chance is spent -> survey card now
+    r = engine.respond(user_id="u", text="side projects mostly")
+    assert r.question_payload and r.question_payload["question_id"] == "S1"
+
+
+def test_no_followup_when_llm_declines_before_survey():
+    """When the LLM has nothing worth asking, go straight to the card and
+    discard its (unshown) response."""
+    class DecliningLLM:
+        def next_turn(self, *, model, messages):
+            return {"response": "", "need_followup": False}
+
+    engine = InterviewEngine(bank=_boundary_bank(),
+                             store=InMemoryInterviewStore(),
+                             llm=DecliningLLM(), model="f")
+    engine.respond(user_id="u", text="hi")
+    r = engine.respond(user_id="u", text="relaxing")
+    assert r.question_payload and r.question_payload["question_id"] == "S1"
+
+
+def test_no_followup_on_survey_answers():
+    """BUG 2: the post-survey bridge turn must NEVER follow up on a survey
+    answer (e.g. the weekend-routine write-up) -- it must ask the next main."""
+    class EagerFollowupLLM:
+        def next_turn(self, *, model, messages):
+            # always wants a follow-up; the ENGINE must deny it here
+            return {"response": "wait tell me more about your weekend??",
+                    "need_followup": True}
+
+    engine = InterviewEngine(bank=_boundary_bank(),
+                             store=InMemoryInterviewStore(),
+                             llm=EagerFollowupLLM(), model="f")
+    engine.respond(user_id="u", text="hi")                      # asks P7
+    engine.respond(user_id="u", text="relaxing")                # fu chance -> taken
+    engine.respond(user_id="u", text="naps")                    # fu answered -> S1 card
+    r = engine.submit_answer(user_id="u", question_id="S1", answer="A")
+    # bridge turn: LLM demanded a follow-up on the survey answer; engine denies
+    state = engine.store.get_or_create("u")
+    assert "QF" in state.asked_ids, "bridge must advance to the next main, not follow up on the survey"
+    assert state.follow_up_ids == []
+    assert r.reply_text, "bridge still asks the next question conversationally"
+
 if __name__ == "__main__":
     test_browse_is_anonymous()
     test_stranger_profile_is_anonymous()
@@ -185,4 +252,7 @@ if __name__ == "__main__":
     test_full_like_arc_and_dm_gating()
     test_like_guards()
     test_dynamic_followup_max_one_per_main()
+    test_followup_chance_before_survey()
+    test_no_followup_when_llm_declines_before_survey()
+    test_no_followup_on_survey_answers()
     print("OK - all pivot smoke tests passed")
