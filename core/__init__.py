@@ -37,6 +37,13 @@ from .training_compiler import (
 )
 from .interview_llm import OpenAIInterviewLLM, InterviewLLM, get_learning_model
 from .interview_prompt import get_interview_prompt
+from .explore import (
+    UserFeatures,
+    build_user_features,
+    score_pair,
+    rank_candidates,
+    MongoExploreStore,
+)
 
 __all__ = [
     # proxy side
@@ -74,4 +81,9 @@ __all__ = [
     "InterviewLLM",
     "get_learning_model",
     "get_interview_prompt",
+    "UserFeatures",
+    "build_user_features",
+    "score_pair",
+    "rank_candidates",
+    "MongoExploreStore",
 ]

@@ -642,7 +642,7 @@ async function renderMe() {
 
 /* ================= BROWSE (anonymous) ================= */
 async function renderBrowse() {
-  const { profiles } = await api("/api/users");
+  const { profiles } = await api("/api/explore");
   const root = el(`<div>
     <h1 class="screen-title">Standins</h1>
     <p class="screen-sub">Everyone here is anonymous — you meet the standin first. If the conversation clicks, send a like.</p>
@@ -657,7 +657,10 @@ async function renderBrowse() {
   profiles.forEach(p => {
     const c = el(`<div class="card profile-card" role="button" tabindex="0">
       <div class="ph anon">${avatarSVG(p.avatar, 110)}</div>
-      <div class="meta"><b>${esc(p.pseudonym)}</b><br><span class="hint mono">standin</span></div>
+      <div class="meta"><b>${esc(p.pseudonym)}</b><br>
+        ${(p.chips && p.chips.length)
+          ? p.chips.map(c => `<span class="why-chip">${esc(c)}</span>`).join("")
+          : `<span class="hint mono">standin</span>`}</div>
     </div>`);
     const open = () => nav(`#/profile/${p.user_id}`);
     c.addEventListener("click", open);

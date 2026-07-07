@@ -233,3 +233,10 @@ details.collapsible summary::-webkit-details-marker { display: none; }
 }
 .av-pick:hover { border-color: var(--proxy); }
 .av-pick.sel { border-color: var(--proxy); background: var(--proxy-soft); }
+
+/* ---------- explore why-chips ---------- */
+.why-chip {
+  display: inline-block; font-size: .72rem; font-family: var(--font-mono);
+  background: var(--you-soft); color: var(--you); border-radius: 99px;
+  padding: 2px 8px; margin: 3px 4px 0 0; letter-spacing: .01em;
+}

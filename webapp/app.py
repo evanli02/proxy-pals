@@ -51,6 +51,7 @@ from core.mongo_stores import (
     persist_unanswered_question,
 )
 from core.bio_suggestions import default_bio_generator
+from core.explore import MongoExploreStore, rank_candidates
 from webapp.auth import hash_password, hash_token, mint_token, verify_password
 from webapp.social import MongoSocialStore
 from webapp.users import (
@@ -167,12 +168,18 @@ def build_deps() -> Dict[str, Any]:
         retriever=default_retriever,
     )
 
+    explore_store = MongoExploreStore()
+
     def finalize_training(state, bank):
         """On interview completion: compile -> persist -> invalidate proxy cache
         so the freshly trained definition is what viewers get immediately."""
         compiled = compile_training(state, bank)
         default_persist(compiled)
         proxy.definitions.invalidate(state.user_id)
+        try:
+            explore_store.rebuild(state.user_id)   # explore features refresh
+        except Exception as e:
+            log.error(f"explore feature rebuild failed for {state.user_id}: {e}")
 
     return {
         "interview": InterviewEngine(store=MongoInterviewStore(), bank=question_bank_v2()),
@@ -183,6 +190,7 @@ def build_deps() -> Dict[str, Any]:
         "review": MongoReviewStore(),
         "knowledge": MongoKnowledgeStore(),
         "social": MongoSocialStore(),
+        "explore": explore_store,
         "bio_generator": default_bio_generator,
         "fetch_training_record": None,  # default: conversations lookup below
     }
@@ -198,6 +206,7 @@ def create_app(deps: Optional[Dict[str, Any]] = None) -> FastAPI:
     review = d.get("review")
     knowledge = d.get("knowledge")
     social = d.get("social")
+    explore = d.get("explore")
     bio_generator = d.get("bio_generator") or (lambda record: [])
 
     def _fetch_training_record(user_id: str):
@@ -318,6 +327,40 @@ def create_app(deps: Optional[Dict[str, Any]] = None) -> FastAPI:
         """Lo-fi discovery placeholder: live profiles, newest first.
         Real browse (filters, pagination) is Phase 3."""
         return {"profiles": users.list_live_profiles(exclude_user_id=user_id)}
+
+    @app.get("/api/explore")
+    def explore_feed(user_id: str = Depends(get_current_user)):
+        """Ranked anonymous suggestions with why-chips. Falls back to the
+        plain browse list when features are unavailable."""
+        cards = users.list_live_profiles(exclude_user_id=user_id)
+        by_id = {c["user_id"]: c for c in cards}
+        # exclusions: connections + people you already liked
+        if social:
+            for uid in social.connections_of(user_id):
+                by_id.pop(uid, None)
+            for uid in list(by_id):
+                if social.liked(user_id, uid):
+                    by_id.pop(uid, None)
+        if explore is None or not by_id:
+            return {"profiles": list(by_id.values())}
+        viewer_feats = explore.get(user_id)
+        if viewer_feats is None:
+            return {"profiles": list(by_id.values())}
+        cand_feats = []
+        featless = []
+        for uid in by_id:
+            f = explore.get(uid)
+            (cand_feats.append(f) if f is not None else featless.append(uid))
+        likes_you = {uid for uid in by_id
+                     if social and social.liked(uid, user_id)}
+        ranked = rank_candidates(viewer_feats, cand_feats, likes_you=likes_you)
+        out = []
+        for r in ranked:
+            card = dict(by_id[r["user_id"]])
+            card["chips"] = r["chips"]
+            out.append(card)
+        out += [by_id[uid] for uid in featless]   # unranked tail, still shown
+        return {"profiles": out}
 
     @app.get("/api/users/{target_id}")
     def view_profile(target_id: str, user_id: str = Depends(get_current_user)):
