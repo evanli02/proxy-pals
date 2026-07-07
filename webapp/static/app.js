@@ -29,18 +29,39 @@ function toast(msg) {
   t.textContent = msg; t.hidden = false;
   clearTimeout(t._timer); t._timer = setTimeout(() => (t.hidden = true), 3200);
 }
-/* ---------- avatar renderer (Mii-ish blob) ---------- */
+/* ---------- avatar renderer (Mii-ish, parametric) ---------- */
+const SHAPES = {
+  blob:  '<ellipse cx="50" cy="58" rx="30" ry="32" fill="{B}"/>',
+  round: '<circle cx="50" cy="56" r="31" fill="{B}"/>',
+  square:'<rect x="21" y="28" width="58" height="58" rx="16" fill="{B}"/>',
+  bean:  '<path d="M50 24 C72 24 80 44 76 62 C72 82 62 90 50 90 C38 90 28 82 24 62 C20 44 28 24 50 24 Z" fill="{B}"/>',
+  egg:   '<ellipse cx="50" cy="58" rx="26" ry="34" fill="{B}"/>',
+};
+const PATTERNS = {
+  none: "",
+  spots: '<circle cx="34" cy="72" r="4.5" fill="#FFFFFF" opacity=".35"/><circle cx="58" cy="80" r="3.5" fill="#FFFFFF" opacity=".35"/><circle cx="68" cy="66" r="3" fill="#FFFFFF" opacity=".35"/>',
+  stripes: '<path d="M24 72 h52 M28 80 h44" stroke="#FFFFFF" opacity=".3" stroke-width="5" stroke-linecap="round"/>',
+  belly: '<ellipse cx="50" cy="74" rx="16" ry="13" fill="#FFFFFF" opacity=".35"/>',
+};
 const EYES = {
   dot: '<circle cx="38" cy="46" r="4" fill="#20241D"/><circle cx="62" cy="46" r="4" fill="#20241D"/>',
   happy: '<path d="M32 46 q6 -8 12 0 M56 46 q6 -8 12 0" stroke="#20241D" stroke-width="3" fill="none" stroke-linecap="round"/>',
   star: '<text x="32" y="52" font-size="14">✦</text><text x="56" y="52" font-size="14">✦</text>',
   sleepy: '<path d="M32 46 q6 5 12 0 M56 46 q6 5 12 0" stroke="#20241D" stroke-width="3" fill="none" stroke-linecap="round"/>',
+  wink: '<circle cx="38" cy="46" r="4" fill="#20241D"/><path d="M56 46 q6 -6 12 0" stroke="#20241D" stroke-width="3" fill="none" stroke-linecap="round"/>',
+  big: '<circle cx="38" cy="46" r="7" fill="#FFF"/><circle cx="62" cy="46" r="7" fill="#FFF"/><circle cx="39.5" cy="47" r="3.5" fill="#20241D"/><circle cx="63.5" cy="47" r="3.5" fill="#20241D"/>',
+  side: '<circle cx="41" cy="46" r="4" fill="#20241D"/><circle cx="65" cy="46" r="4" fill="#20241D"/>',
+  shades: '<rect x="28" y="40" width="18" height="11" rx="4" fill="#20241D"/><rect x="54" y="40" width="18" height="11" rx="4" fill="#20241D"/><path d="M46 44 h8" stroke="#20241D" stroke-width="3"/>',
 };
 const MOUTH = {
   smile: '<path d="M40 62 q10 10 20 0" stroke="#20241D" stroke-width="3" fill="none" stroke-linecap="round"/>',
   open: '<ellipse cx="50" cy="64" rx="7" ry="9" fill="#20241D"/>',
   flat: '<path d="M42 64 h16" stroke="#20241D" stroke-width="3" stroke-linecap="round"/>',
   cat: '<path d="M40 62 q5 7 10 0 q5 7 10 0" stroke="#20241D" stroke-width="3" fill="none" stroke-linecap="round"/>',
+  grin: '<path d="M38 61 q12 13 24 0 z" fill="#FFF" stroke="#20241D" stroke-width="2.5"/>',
+  tongue: '<path d="M40 61 q10 9 20 0" stroke="#20241D" stroke-width="3" fill="none" stroke-linecap="round"/><path d="M47 65 q3 8 8 4 q1 -4 -1 -6 z" fill="#D4707F"/>',
+  smirk: '<path d="M42 64 q9 6 18 -2" stroke="#20241D" stroke-width="3" fill="none" stroke-linecap="round"/>',
+  ooo: '<circle cx="50" cy="64" r="5" fill="none" stroke="#20241D" stroke-width="3"/>',
 };
 const ACC = {
   none: "",
@@ -48,12 +69,22 @@ const ACC = {
   halo: '<ellipse cx="50" cy="10" rx="16" ry="5" fill="none" stroke="#C77E3C" stroke-width="3"/>',
   antenna: '<path d="M50 18 v-10" stroke="#20241D" stroke-width="3" stroke-linecap="round"/><circle cx="50" cy="6" r="4" fill="#C77E3C"/>',
   bow: '<path d="M50 14 l-10 -6 v12 z M50 14 l10 -6 v12 z" fill="#A3524B"/>',
+  crown: '<path d="M36 18 l4 -10 l6 7 l4 -10 l4 10 l6 -7 l4 10 z" fill="#C77E3C" stroke="#20241D" stroke-width="1.5"/>',
+  flower: '<g transform="translate(66,14)"><circle r="3.5" fill="#C77E3C"/><circle cx="0" cy="-6" r="3.5" fill="#F0E4E4"/><circle cx="5.7" cy="1.8" r="3.5" fill="#F0E4E4"/><circle cx="-5.7" cy="1.8" r="3.5" fill="#F0E4E4"/><circle cx="3.5" cy="-4.9" r="3.5" fill="#F0E4E4"/><circle cx="-3.5" cy="-4.9" r="3.5" fill="#F0E4E4"/></g>',
+  headphones: '<path d="M26 46 q0 -26 24 -26 q24 0 24 26" stroke="#20241D" stroke-width="4" fill="none"/><rect x="20" y="42" width="9" height="15" rx="4" fill="#20241D"/><rect x="71" y="42" width="9" height="15" rx="4" fill="#20241D"/>',
+  horns: '<path d="M34 24 q-8 -8 -4 -16 q8 4 10 12 M66 24 q8 -8 4 -16 q-8 4 -10 12" fill="#A3524B"/>',
+  beanie: '<path d="M27 34 q23 -26 46 0 l-2 6 q-21 -10 -42 0 z" fill="#6B5B9E"/><circle cx="50" cy="12" r="5" fill="#E4E0F0"/>',
+};
+const BLUSH = {
+  off: "",
+  on: '<ellipse cx="31" cy="56" rx="5" ry="3" fill="#D4707F" opacity=".45"/><ellipse cx="69" cy="56" rx="5" ry="3" fill="#D4707F" opacity=".45"/>',
 };
 function avatarSVG(av, size = 72) {
   const a = av || {};
+  const body = (SHAPES[a.shape] || SHAPES.blob).replaceAll("{B}", esc(a.body || "#2F5D50"));
   return `<svg width="${size}" height="${size}" viewBox="0 0 100 100" role="img" aria-label="avatar">
     <rect width="100" height="100" rx="18" fill="${esc(a.bg || "#DFE9E4")}"/>
-    <ellipse cx="50" cy="58" rx="30" ry="32" fill="${esc(a.body || "#2F5D50")}"/>
+    ${body}${PATTERNS[a.pattern] || ""}${BLUSH[a.blush] || ""}
     ${EYES[a.eyes] || EYES.dot}${MOUTH[a.mouth] || MOUTH.smile}${ACC[a.acc] || ""}
   </svg>`;
 }
@@ -423,31 +454,46 @@ async function renderMe() {
 
   /* avatar builder */
   const AV_OPTS = {
-    bg: ["#DFE9E4", "#F4E6D5", "#E4E0F0", "#F0E4E4", "#E0EDF0", "#EFEBD8"],
-    body: ["#2F5D50", "#C77E3C", "#6B5B9E", "#A3524B", "#3F7D8C", "#8C7B3F"],
-    eyes: ["dot", "happy", "star", "sleepy"],
-    mouth: ["smile", "open", "flat", "cat"],
-    acc: ["none", "sprout", "halo", "antenna", "bow"],
+    shape: ["blob", "round", "square", "bean", "egg"],
+    eyes: ["dot", "happy", "star", "sleepy", "wink", "big", "side", "shades"],
+    mouth: ["smile", "open", "flat", "cat", "grin", "tongue", "smirk", "ooo"],
+    acc: ["none", "sprout", "halo", "antenna", "bow", "crown", "flower", "headphones", "horns", "beanie"],
+    pattern: ["none", "spots", "stripes", "belly"],
+    blush: ["off", "on"],
+    body: ["#2F5D50", "#C77E3C", "#6B5B9E", "#A3524B", "#3F7D8C", "#8C7B3F",
+           "#B85C79", "#4A6FA5", "#5E8C61", "#8A6552"],
+    bg: ["#DFE9E4", "#F4E6D5", "#E4E0F0", "#F0E4E4", "#E0EDF0", "#EFEBD8",
+         "#EAE0EC", "#DCEBE0", "#F1E3D3", "#E3E7F0"],
   };
-  let av = Object.assign({ bg: "#DFE9E4", body: "#2F5D50", eyes: "dot", mouth: "smile", acc: "none" }, me.avatar || {});
+  const AV_DEFAULTS = { bg: "#DFE9E4", body: "#2F5D50", shape: "blob",
+    eyes: "dot", mouth: "smile", acc: "none", pattern: "none", blush: "off" };
+  let av = Object.assign({}, AV_DEFAULTS, me.avatar || {});
   function paintAvatar() {
     $("#me-avatar", root).innerHTML = avatarSVG(av, 84);
     const host = $("#me-av-opts", root); host.innerHTML = "";
-    [["eyes", "Eyes"], ["mouth", "Mouth"], ["acc", "Extra"], ["body", "Color"], ["bg", "Backdrop"]].forEach(([k, label]) => {
-      const row = el(`<div class="row" style="margin-top:8px"><span class="mono" style="width:76px">${label}</span></div>`);
-      AV_OPTS[k].forEach(v => {
-        const isColor = v.startsWith("#");
-        const b = el(isColor
-          ? `<button type="button" class="swatch ${av[k] === v ? "sel" : ""}" style="background:${v}" aria-label="${v}"></button>`
-          : `<button type="button" class="chip ${av[k] === v ? "sel-chip" : ""}">${v}</button>`);
-        b.addEventListener("click", async () => {
-          av[k] = v; paintAvatar();
-          try { await api("/api/users/me", { method: "PATCH", body: { avatar: av } }); } catch (e) { toast(e.message); }
+    [["shape", "Shape"], ["eyes", "Eyes"], ["mouth", "Mouth"], ["acc", "Extra"],
+     ["pattern", "Pattern"], ["blush", "Blush"], ["body", "Color"], ["bg", "Backdrop"]]
+      .forEach(([k, label]) => {
+        const row = el(`<div class="av-row"><span class="mono av-label">${label}</span><span class="av-opts"></span></div>`);
+        const opts = $(".av-opts", row);
+        AV_OPTS[k].forEach(v => {
+          const isColor = v.startsWith("#");
+          let b;
+          if (isColor) {
+            b = el(`<button type="button" class="swatch ${av[k] === v ? "sel" : ""}" style="background:${v}" aria-label="${v}"></button>`);
+          } else {
+            // mini live preview: this option applied to the current avatar
+            const preview = avatarSVG(Object.assign({}, av, { [k]: v }), 40);
+            b = el(`<button type="button" class="av-pick ${av[k] === v ? "sel" : ""}" aria-label="${v}" title="${v}">${preview}</button>`);
+          }
+          b.addEventListener("click", async () => {
+            av[k] = v; paintAvatar();
+            try { await api("/api/users/me", { method: "PATCH", body: { avatar: av } }); } catch (e) { toast(e.message); }
+          });
+          opts.appendChild(b);
         });
-        row.appendChild(b);
+        host.appendChild(row);
       });
-      host.appendChild(row);
-    });
   }
   paintAvatar();
   $("#me-av-random", root).addEventListener("click", async () => {

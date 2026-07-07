@@ -222,3 +222,14 @@ details.collapsible summary::-webkit-details-marker { display: none; }
 .swatch { width: 26px; height: 26px; border-radius: 7px; border: 2px solid transparent; cursor: pointer; }
 .swatch.sel { border-color: var(--ink); }
 .chip.sel-chip { background: var(--proxy); color: #FFF; }
+
+/* ---------- avatar builder ---------- */
+.av-row { display: flex; gap: 10px; align-items: flex-start; margin-top: 10px; }
+.av-label { width: 76px; padding-top: 10px; flex-shrink: 0; }
+.av-opts { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.av-pick {
+  padding: 2px; background: #FFF; border: 2px solid var(--line);
+  border-radius: 10px; cursor: pointer; line-height: 0;
+}
+.av-pick:hover { border-color: var(--proxy); }
+.av-pick.sel { border-color: var(--proxy); background: var(--proxy-soft); }
