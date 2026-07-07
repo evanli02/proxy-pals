@@ -343,24 +343,32 @@ def create_app(deps: Optional[Dict[str, Any]] = None) -> FastAPI:
                     by_id.pop(uid, None)
         if explore is None or not by_id:
             return {"profiles": list(by_id.values())}
-        viewer_feats = explore.get(user_id)
-        if viewer_feats is None:
+        try:
+            viewer_feats = explore.get(user_id)
+            if viewer_feats is None:
+                return {"profiles": list(by_id.values())}
+            cand_feats = []
+            featless = []
+            for uid in by_id:
+                f = explore.get(uid)
+                (cand_feats.append(f) if f is not None else featless.append(uid))
+            likes_you = {uid for uid in by_id
+                         if social and social.liked(uid, user_id)}
+            ranked = rank_candidates(viewer_feats, cand_feats, likes_you=likes_you)
+            out = []
+            for r in ranked:
+                card = dict(by_id[r["user_id"]])
+                card["chips"] = r["chips"]
+                out.append(card)
+            out += [by_id[uid] for uid in featless]   # unranked tail, still shown
+            return {"profiles": out}
+        except Exception:
+            # ranking is an enhancement -- browse must never break on bad or
+            # legacy data. Serve the plain list and log the full traceback.
+            import traceback
+            log.error("explore ranking failed; serving unranked list\n"
+                      + traceback.format_exc())
             return {"profiles": list(by_id.values())}
-        cand_feats = []
-        featless = []
-        for uid in by_id:
-            f = explore.get(uid)
-            (cand_feats.append(f) if f is not None else featless.append(uid))
-        likes_you = {uid for uid in by_id
-                     if social and social.liked(uid, user_id)}
-        ranked = rank_candidates(viewer_feats, cand_feats, likes_you=likes_you)
-        out = []
-        for r in ranked:
-            card = dict(by_id[r["user_id"]])
-            card["chips"] = r["chips"]
-            out.append(card)
-        out += [by_id[uid] for uid in featless]   # unranked tail, still shown
-        return {"profiles": out}
 
     @app.get("/api/users/{target_id}")
     def view_profile(target_id: str, user_id: str = Depends(get_current_user)):

@@ -168,9 +168,30 @@ def test_explore_endpoint():
     assert len(out) == 2 and all("pseudonym" in p for p in out)
 
 
+
+def test_legacy_data_shapes_never_crash():
+    """Production regression: legacy records store loves as LISTS, scores as
+    strings, mixed embedding dims, stringified created_at. Ranking must
+    degrade, never raise."""
+    legacy_record = {"spc_raw": {
+        "value_scores": {"Power": "high", "Security": 4},     # string score
+        "personality_scores": None,
+        "context": {"loves": ["music", "hiking"], "hates": None},  # LIST loves
+    }}
+    f_legacy = build_user_features("L", legacy_record, [[0.1] * 4, [0.2] * 9],
+                                   fake_embedder)   # mixed qa dims
+    assert f_legacy.loves == ["music", "hiking"]
+    f_legacy.created_at = "2026-06-01"              # stringified date
+
+    A = feats("A", ["music"], ["gym"], VALS_A)
+    none_record_feats = UserFeatures(user_id="N")    # empty features
+    ranked = rank_candidates(A, [f_legacy, none_record_feats])
+    assert {r["user_id"] for r in ranked} == {"L", "N"}
+
 if __name__ == "__main__":
     test_components_and_chips()
     test_ranking_order_and_likes_boost()
     test_freshness_boost()
     test_explore_endpoint()
+    test_legacy_data_shapes_never_crash()
     print("OK - all explore smoke tests passed")

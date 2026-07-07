@@ -45,7 +45,7 @@ Embedder = Callable[[List[str]], List[List[float]]]
 # --------------------------- vector helpers ---------------------------------
 
 def _cos(a: Optional[List[float]], b: Optional[List[float]]) -> Optional[float]:
-    if not a or not b:
+    if not a or not b or len(a) != len(b):   # mixed-dim legacy vectors -> no signal
         return None
     dot = sum(x * y for x, y in zip(a, b))
     na = math.sqrt(sum(x * x for x in a)) or 1e-9
@@ -57,8 +57,10 @@ def _mean(vecs: List[List[float]]) -> Optional[List[float]]:
     vecs = [v for v in vecs if v]
     if not vecs:
         return None
+    dim = max(len(v) for v in vecs)          # tolerate mixed-dim legacy vectors
+    vecs = [v for v in vecs if len(v) == dim]
     n = len(vecs)
-    return [sum(v[i] for v in vecs) / n for i in range(len(vecs[0]))]
+    return [sum(v[i] for v in vecs) / n for i in range(dim)]
 
 
 # --------------------------- features ----------------------------------------
@@ -88,8 +90,14 @@ def default_embedder(texts: List[str]) -> List[List[float]]:
     return [d.embedding for d in resp.data]
 
 
-def _split_list(text: str) -> List[str]:
-    return [t.strip() for t in (text or "").split(",") if t.strip()][:12]
+def _split_list(value: Any) -> List[str]:
+    """Legacy records store loves/hates as lists; current ones as joined
+    strings. Accept both (and skip non-string items defensively)."""
+    if isinstance(value, list):
+        items = [str(t).strip() for t in value if str(t).strip()]
+    else:
+        items = [t.strip() for t in str(value or "").split(",") if t.strip()]
+    return items[:12]
 
 
 def build_user_features(
@@ -104,7 +112,7 @@ def build_user_features(
     ctx = spc.get("context") or {}
     loves = _split_list(ctx.get("loves", ""))
     hates = _split_list(ctx.get("hates", ""))
-    routine = " ".join(t for t in [ctx.get("weekday"), ctx.get("weekend")] if t)
+    routine = " ".join(str(t) for t in [ctx.get("weekday"), ctx.get("weekend")] if t)
 
     to_embed, slots = [], []
     for t in loves:
@@ -144,7 +152,24 @@ def build_user_features(
 
 # --------------------------- component scores --------------------------------
 
+def _num(x) -> Optional[float]:
+    try:
+        return float(x)
+    except (TypeError, ValueError):
+        return None
+
+
+def _numeric(d: Dict[str, Any]) -> Dict[str, float]:
+    out = {}
+    for k, v in (d or {}).items():
+        n = _num(v)
+        if n is not None:
+            out[k] = n
+    return out
+
+
 def values_similarity(a: Dict[str, float], b: Dict[str, float]) -> Optional[float]:
+    a, b = _numeric(a), _numeric(b)
     keys = sorted(set(a) & set(b))
     if len(keys) < 3:
         return None
@@ -154,6 +179,7 @@ def values_similarity(a: Dict[str, float], b: Dict[str, float]) -> Optional[floa
 
 
 def personality_similarity(a: Dict[str, float], b: Dict[str, float]) -> Optional[float]:
+    a, b = _numeric(a), _numeric(b)
     total_w, acc = 0.0, 0.0
     for trait, w in TRAIT_WEIGHTS.items():
         if trait in a and trait in b:
@@ -252,8 +278,12 @@ def rank_candidates(
         if c.user_id in likes_you:
             base += LIKES_YOU_BOOST
             s["chips"] = (["Liked your standin"] + s["chips"])[:3]
-        if c.created_at and (now - c.created_at).days <= 7:
-            base += FRESHNESS_BOOST
+        if isinstance(c.created_at, datetime.datetime):
+            try:
+                if (now - c.created_at).days <= 7:
+                    base += FRESHNESS_BOOST
+            except TypeError:
+                pass  # tz-aware vs naive mismatch: skip the boost
         s["score"] = base
 
     # MMR: greedy pick, penalizing similarity (qa-centroid) to already-picked
