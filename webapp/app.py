@@ -31,7 +31,7 @@ from __future__ import annotations
 
 import logging
 import uuid
-from typing import Any, Dict, Literal, Optional
+from typing import Annotated, Any, Dict, List, Literal, Optional, Union
 
 from pathlib import Path
 
@@ -75,6 +75,147 @@ _DEV_HEADER_FALLBACK = _os.environ.get("ALLOW_DEV_USER_HEADER", "true").lower() 
 
 
 # --- request/response models -------------------------------------------------
+
+# --------------- response models (so /docs shows real shapes) ---------------
+
+class HealthOut(BaseModel):
+    ok: bool
+    version: str
+
+
+class AvatarModel(BaseModel):
+    """Parametric avatar. All keys optional; see API.md for legal values."""
+    model_config = {"extra": "allow"}
+    bg: Optional[str] = Field(default=None, description="Backdrop hex color")
+    body: Optional[str] = Field(default=None, description="Body hex color")
+    shape: Optional[str] = Field(default=None, description="blob|round|square|bean|egg")
+    eyes: Optional[str] = None
+    mouth: Optional[str] = None
+    acc: Optional[str] = None
+    pattern: Optional[str] = None
+    blush: Optional[str] = None
+
+
+class AnonProfileOut(BaseModel):
+    """What strangers see: pseudonym + avatar, nothing identifying."""
+    anonymous: Literal[True]
+    user_id: str
+    pseudonym: str
+    avatar: AvatarModel
+    profile_live: bool
+    transcript_visibility: bool = Field(
+        description="True = the owner reviews standin conversations; surface this to the user")
+    you_liked: Optional[bool] = None
+    likes_you: Optional[bool] = None
+    connected: Optional[bool] = None
+    chips: Optional[List[str]] = Field(
+        default=None, description="Explore only: 0-3 'why suggested' strings")
+
+
+class FullProfileOut(BaseModel):
+    """Full profile: returned for yourself or a mutual connection."""
+    anonymous: Literal[False]
+    user_id: str
+    name: str
+    age: int
+    bio: str
+    city: str
+    gender: str
+    pseudonym: str
+    avatar: AvatarModel
+    photos: List[str] = Field(description="Photo ids; render via GET /api/photos/{id}")
+    transcript_visibility: bool
+    proxy_mode: Literal["strict", "mimic", "free"]
+    profile_live: bool
+    you_liked: Optional[bool] = None
+    likes_you: Optional[bool] = None
+    connected: Optional[bool] = None
+
+
+class OwnProfileOut(FullProfileOut):
+    """Your own profile (adds email)."""
+    email: str
+
+
+ProfileOut = Annotated[Union[FullProfileOut, AnonProfileOut],
+                       Field(discriminator="anonymous")]
+
+
+class PhotoOut(BaseModel):
+    photo_id: str
+    url: str
+
+
+class ExploreOut(BaseModel):
+    profiles: List[AnonProfileOut] = Field(
+        description="Ranked best-first; entries may include chips")
+
+
+class LikeOut(BaseModel):
+    mutual: bool = Field(description="True = connection just formed: profiles + DMs unlocked")
+
+
+class ConnectionsOut(BaseModel):
+    connections: List[FullProfileOut]
+    incoming: List[AnonProfileOut] = Field(
+        description="People who liked you -- still anonymous until mutual")
+
+
+class DmOut(BaseModel):
+    model_config = {"populate_by_name": True}
+    from_: str = Field(alias="from", serialization_alias="from")
+    to: str
+    text: str
+    at: str
+
+
+class DmThreadOut(BaseModel):
+    messages: List[DmOut] = Field(description="Oldest first, latest 200; poll every ~4s")
+
+
+class BioSuggestionsOut(BaseModel):
+    suggestions: List[str] = Field(description="3-5 one-sentence bios in the user's voice")
+
+
+class KnowledgeItemOut(BaseModel):
+    id: str
+    question: str
+    answer: str
+    created_at: str
+
+
+class KnowledgeOut(BaseModel):
+    items: List[KnowledgeItemOut]
+
+
+class ReviewItemOut(BaseModel):
+    id: str
+    question: str
+    category: str
+    created_at: str
+
+
+class ReviewOut(BaseModel):
+    questions: List[ReviewItemOut]
+
+
+class QuestionCardOut(BaseModel):
+    """A structured survey card. Render by `type`; answer shapes in API.md."""
+    question_id: str
+    type: Literal["likert_battery", "list", "long_text", "choice"]
+    prompt: str
+    optional: bool = Field(description="True = null answer allowed (skip)")
+    scale_labels: Optional[List[str]] = Field(default=None, description="likert_battery: 7 labels, 1..7")
+    items: Optional[List[Dict[str, str]]] = Field(default=None, description="likert_battery: [{id, text}]")
+    min_items: Optional[int] = Field(default=None, description="list: minimum entries")
+    recommended_chars: Optional[int] = Field(default=None, description="long_text: advisory length")
+    options: Optional[List[str]] = Field(default=None, description="choice: pick one")
+
+
+class TranscriptMessageOut(BaseModel):
+    role: Literal["user", "assistant"]
+    content: str
+
 
 class SignupIn(BaseModel):
     email: EmailStr
@@ -130,9 +271,9 @@ class InterviewOut(BaseModel):
     total_main_questions: int
     # present when the next question is structured (likert battery / list /
     # long_text / choice) -- the UI renders this card instead of free chat
-    question: Optional[Dict[str, Any]] = None
+    question: Optional[QuestionCardOut] = None
     # status only: role/content transcript so the UI can restore on reload
-    transcript: Optional[list] = None
+    transcript: Optional[List[TranscriptMessageOut]] = None
 
 
 class StructuredAnswerIn(BaseModel):
@@ -220,7 +361,7 @@ def create_app(deps: Optional[Dict[str, Any]] = None) -> FastAPI:
             return None
         return col.find_one({"user_id": user_id})
 
-    APP_VERSION = "0.4.1"  # bump on every deploy-worthy change
+    APP_VERSION = "0.4.2"  # bump on every deploy-worthy change
     app = FastAPI(title="Proxy Social Prototype API", version=APP_VERSION)
 
     # --- identity -------------------------------------------------------------
@@ -239,14 +380,14 @@ def create_app(deps: Optional[Dict[str, Any]] = None) -> FastAPI:
             return x_user_id
         raise HTTPException(status_code=401, detail="Authorization required")
 
-    @app.get("/api/health")
+    @app.get("/api/health", response_model=HealthOut, tags=["Meta"], summary="Health + deployed version")
     def health():
         # version lets you verify WHICH code is actually deployed
         return {"ok": True, "version": APP_VERSION}
 
     # --- auth -------------------------------------------------------------------
 
-    @app.post("/api/auth/signup", response_model=TokenOut, status_code=201)
+    @app.post("/api/auth/signup", response_model=TokenOut, status_code=201, tags=["Auth"], summary="Create account, returns bearer token")
     def signup(body: SignupIn):
         try:
             doc = users.create_user(
@@ -258,7 +399,7 @@ def create_app(deps: Optional[Dict[str, Any]] = None) -> FastAPI:
         users.save_token(hash_token(token), doc["user_id"])
         return TokenOut(token=token, user_id=doc["user_id"])
 
-    @app.post("/api/auth/login", response_model=TokenOut)
+    @app.post("/api/auth/login", response_model=TokenOut, tags=["Auth"], summary="Login, returns bearer token")
     def login(body: LoginIn):
         doc = users.get_by_email(body.email)
         if not doc or not verify_password(body.password, doc["password_hash"]):
@@ -270,14 +411,14 @@ def create_app(deps: Optional[Dict[str, Any]] = None) -> FastAPI:
 
     # --- own profile ---------------------------------------------------------------
 
-    @app.get("/api/users/me")
+    @app.get("/api/users/me", response_model=OwnProfileOut, tags=["My profile"], summary="Own full profile")
     def me(user_id: str = Depends(get_current_user)):
         doc = users.get_by_id(user_id)
         if doc is None:
             raise HTTPException(status_code=404, detail="User not found")
         return own_profile(doc)
 
-    @app.patch("/api/users/me")
+    @app.patch("/api/users/me", response_model=OwnProfileOut, tags=["My profile"], summary="Edit profile fields (partial)")
     def update_me(body: ProfilePatch, user_id: str = Depends(get_current_user)):
         doc = users.update_profile(user_id, body.model_dump())
         if doc is None:
@@ -288,7 +429,7 @@ def create_app(deps: Optional[Dict[str, Any]] = None) -> FastAPI:
 
     # --- photos ------------------------------------------------------------------------
 
-    @app.post("/api/users/me/photos", status_code=201)
+    @app.post("/api/users/me/photos", response_model=PhotoOut, status_code=201, tags=["Photos"], summary="Upload photo (multipart, max 6)")
     async def upload_photo(
         file: UploadFile = File(...), user_id: str = Depends(get_current_user)
     ):
@@ -308,13 +449,13 @@ def create_app(deps: Optional[Dict[str, Any]] = None) -> FastAPI:
             raise HTTPException(status_code=404, detail="User not found")
         return {"photo_id": photo_id, "url": f"/api/photos/{photo_id}"}
 
-    @app.delete("/api/users/me/photos/{photo_id}", status_code=204)
+    @app.delete("/api/users/me/photos/{photo_id}", status_code=204, tags=["Photos"], summary="Delete own photo")
     def delete_photo(photo_id: str, user_id: str = Depends(get_current_user)):
         if not users.delete_photo(user_id, photo_id):
             raise HTTPException(status_code=404, detail="Photo not found")
         return Response(status_code=204)
 
-    @app.get("/api/photos/{photo_id}")
+    @app.get("/api/photos/{photo_id}", tags=["Photos"], summary="Serve photo bytes (public)")
     def get_photo(photo_id: str):
         result = users.get_photo(photo_id)
         if result is None:
@@ -324,13 +465,13 @@ def create_app(deps: Optional[Dict[str, Any]] = None) -> FastAPI:
 
     # --- public profiles -----------------------------------------------------------------
 
-    @app.get("/api/users")
+    @app.get("/api/users", response_model=ExploreOut, tags=["Discovery"], summary="Plain live-profile list (unranked; prefer /api/explore)")
     def browse(user_id: str = Depends(get_current_user)):
         """Lo-fi discovery placeholder: live profiles, newest first.
         Real browse (filters, pagination) is Phase 3."""
         return {"profiles": users.list_live_profiles(exclude_user_id=user_id)}
 
-    @app.get("/api/explore")
+    @app.get("/api/explore", response_model=ExploreOut, tags=["Discovery"], summary="Ranked anonymous suggestions with why-chips")
     def explore_feed(user_id: str = Depends(get_current_user)):
         """Ranked anonymous suggestions with why-chips. This route must never
         500: any failure degrades to the plain (or empty) list with a logged
@@ -376,7 +517,7 @@ def create_app(deps: Optional[Dict[str, Any]] = None) -> FastAPI:
                       + traceback.format_exc())
             return {"profiles": list(by_id.values())}
 
-    @app.get("/api/users/{target_id}")
+    @app.get("/api/users/{target_id}", response_model=ProfileOut, tags=["Discovery"], summary="Profile view: FULL if self or connected, ANONYMOUS otherwise")
     def view_profile(target_id: str, user_id: str = Depends(get_current_user)):
         doc = users.get_by_id(target_id)
         if doc is None:
@@ -396,7 +537,7 @@ def create_app(deps: Optional[Dict[str, Any]] = None) -> FastAPI:
 
     # --- likes / connections / DMs -------------------------------------------
 
-    @app.post("/api/likes/{target_id}")
+    @app.post("/api/likes/{target_id}", response_model=LikeOut, tags=["Social"], summary="Send a like; returns whether it became mutual")
     def send_like(target_id: str, user_id: str = Depends(get_current_user)):
         target = users.get_by_id(target_id)
         if target is None or not target.get("profile_live"):
@@ -407,7 +548,7 @@ def create_app(deps: Optional[Dict[str, Any]] = None) -> FastAPI:
             raise HTTPException(status_code=400, detail="You can't like yourself")
         return {"mutual": mutual}
 
-    @app.get("/api/connections")
+    @app.get("/api/connections", response_model=ConnectionsOut, tags=["Social"], summary="Connections (full profiles) + incoming likes (anonymous)")
     def connections(user_id: str = Depends(get_current_user)):
         """Connections (full profiles) + incoming likes (anonymous)."""
         conns, incoming = [], []
@@ -423,7 +564,7 @@ def create_app(deps: Optional[Dict[str, Any]] = None) -> FastAPI:
                 incoming.append(a)
         return {"connections": conns, "incoming": incoming}
 
-    @app.post("/api/messages/{peer_id}")
+    @app.post("/api/messages/{peer_id}", response_model=DmOut, tags=["Social"], summary="Send DM (mutual connections only)")
     def send_message(peer_id: str, body: DmIn,
                      user_id: str = Depends(get_current_user)):
         if not social.connected(user_id, peer_id):
@@ -431,7 +572,7 @@ def create_app(deps: Optional[Dict[str, Any]] = None) -> FastAPI:
                                 detail="You can only message mutual connections")
         return social.send_dm(user_id, peer_id, body.text)
 
-    @app.get("/api/messages/{peer_id}")
+    @app.get("/api/messages/{peer_id}", response_model=DmThreadOut, tags=["Social"], summary="Fetch DM thread (poll this)")
     def get_messages(peer_id: str, user_id: str = Depends(get_current_user)):
         if not social.connected(user_id, peer_id):
             raise HTTPException(status_code=403,
@@ -459,25 +600,25 @@ def create_app(deps: Optional[Dict[str, Any]] = None) -> FastAPI:
             question=result.question_payload,
         )
 
-    @app.post("/api/interview/message", response_model=InterviewOut)
+    @app.post("/api/interview/message", response_model=InterviewOut, tags=["Training"], summary="Free-text interview turn (may return a survey card)")
     def interview_message(body: MessageIn, user_id: str = Depends(get_current_user)):
         result = interview.respond(user_id=user_id, text=body.text)
         return _interview_out(result, user_id)
 
-    @app.post("/api/interview/skip", response_model=InterviewOut)
+    @app.post("/api/interview/skip", response_model=InterviewOut, tags=["Training"], summary="Skip the current free-text question")
     def interview_skip(user_id: str = Depends(get_current_user)):
         """Skip the current question (privacy choice). Free-text questions only."""
         result = interview.skip(user_id=user_id)
         return _interview_out(result, user_id)
 
-    @app.post("/api/interview/restart", status_code=204)
+    @app.post("/api/interview/restart", status_code=204, tags=["Training"], summary="Retrain from scratch (old standin stays live meanwhile)")
     def interview_restart(user_id: str = Depends(get_current_user)):
         """Retrain from scratch. The existing proxy stays live (old training)
         until the new interview completes and recompiles."""
         interview.store.reset(user_id)
         return Response(status_code=204)
 
-    @app.post("/api/users/me/bio-suggestions")
+    @app.post("/api/users/me/bio-suggestions", response_model=BioSuggestionsOut, tags=["My profile"], summary="3-5 bio suggestions from training data")
     def bio_suggestions(user_id: str = Depends(get_current_user)):
         record = _fetch_training_record(user_id)
         if not record:
@@ -485,34 +626,34 @@ def create_app(deps: Optional[Dict[str, Any]] = None) -> FastAPI:
                                 detail="Finish training your standin first")
         return {"suggestions": bio_generator(record)}
 
-    @app.get("/api/knowledge")
+    @app.get("/api/knowledge", response_model=KnowledgeOut, tags=["Standin knowledge"], summary="Everything your standin can answer")
     def knowledge_list(user_id: str = Depends(get_current_user)):
         """Everything your standin can answer: question/answer pairs."""
         if knowledge is None:
             return {"items": []}
         return {"items": knowledge.list(user_id)}
 
-    @app.patch("/api/knowledge/{qa_id}", status_code=204)
+    @app.patch("/api/knowledge/{qa_id}", status_code=204, tags=["Standin knowledge"], summary="Edit an answer (re-embeds immediately)")
     def knowledge_edit(qa_id: str, body: KnowledgeEditIn,
                        user_id: str = Depends(get_current_user)):
         if knowledge is None or not knowledge.update(user_id, qa_id, body.answer):
             raise HTTPException(status_code=404, detail="Not found")
         return Response(status_code=204)
 
-    @app.delete("/api/knowledge/{qa_id}", status_code=204)
+    @app.delete("/api/knowledge/{qa_id}", status_code=204, tags=["Standin knowledge"], summary="Delete a fact")
     def knowledge_delete(qa_id: str, user_id: str = Depends(get_current_user)):
         if knowledge is None or not knowledge.delete(user_id, qa_id):
             raise HTTPException(status_code=404, detail="Not found")
         return Response(status_code=204)
 
-    @app.get("/api/review")
+    @app.get("/api/review", response_model=ReviewOut, tags=["Standin knowledge"], summary="Questions your standin could not answer")
     def review_pending(user_id: str = Depends(get_current_user)):
         """Questions people asked your standin that it couldn't answer."""
         if review is None:
             return {"questions": []}
         return {"questions": review.pending(user_id)}
 
-    @app.post("/api/review/{item_id}/answer", status_code=204)
+    @app.post("/api/review/{item_id}/answer", status_code=204, tags=["Standin knowledge"], summary="Teach an answer to a gap")
     def review_answer(item_id: str, body: ReviewAnswerIn,
                       user_id: str = Depends(get_current_user)):
         """Answer a gap: it becomes searchable knowledge for your standin."""
@@ -521,7 +662,7 @@ def create_app(deps: Optional[Dict[str, Any]] = None) -> FastAPI:
         proxy.definitions.invalidate(user_id)
         return Response(status_code=204)
 
-    @app.post("/api/interview/answer", response_model=InterviewOut)
+    @app.post("/api/interview/answer", response_model=InterviewOut, tags=["Training"], summary="Submit a structured survey answer")
     def interview_answer(body: StructuredAnswerIn, user_id: str = Depends(get_current_user)):
         """Submit a structured answer (likert battery / list / long_text / choice)."""
         try:
@@ -532,7 +673,7 @@ def create_app(deps: Optional[Dict[str, Any]] = None) -> FastAPI:
             raise HTTPException(status_code=422, detail=str(e))
         return _interview_out(result, user_id)
 
-    @app.get("/api/interview/status", response_model=InterviewOut)
+    @app.get("/api/interview/status", response_model=InterviewOut, tags=["Training"], summary="Progress + transcript + pending card (restore on launch)")
     def interview_status(user_id: str = Depends(get_current_user)):
         state = interview.store.get_or_create(user_id)
         ready = interview.bank.is_complete(set(state.asked_ids))
@@ -559,7 +700,7 @@ def create_app(deps: Optional[Dict[str, Any]] = None) -> FastAPI:
 
     # --- proxy chat -----------------------------------------------------------------------
 
-    @app.post("/api/proxy/{target_id}/message", response_model=ProxyOut)
+    @app.post("/api/proxy/{target_id}/message", response_model=ProxyOut, tags=["Standin chat"], summary="Talk to a standin (echo conversation_id to continue)")
     def proxy_message(
         target_id: str,
         body: MessageIn,
