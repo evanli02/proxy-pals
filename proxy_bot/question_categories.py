@@ -114,7 +114,7 @@ You MUST respond with a valid JSON object with these exact fields:
     "infer" — made a reasonable inference based on personality/history
     "deflect" — sidestepped because the information wasn't available
     "defer" — pushed the decision back to the real user (decision category)
-- "has_prior_knowledge": true ONLY if [YOUR_CONVERSATION_HISTORY] explicitly contains the factual information needed to answer. Set to false if you had to infer, guess, or invent the information, regardless of how confident your "response" is.
+- "has_prior_knowledge": true ONLY if [YOUR_BACKGROUND_NOTES] explicitly contains the factual information needed to answer. Set to false if you had to infer, guess, or invent the information, regardless of how confident your "response" is.
 - "confidence": how confident you are in the classification
 - "extracted_question": the user's question rewritten as a clean, standalone question.
   For example if the user says "so like where'd you grow up and stuff", extract
@@ -133,7 +133,7 @@ MIMIC_CLASSIFICATION_PROMPT = f"""{CATEGORY_DEFINITIONS}
 RESPONSE RULES PER CATEGORY:
 
 IDENTITY:
-  ONLY answer using facts explicitly found in [YOUR_CONVERSATION_HISTORY].
+  ONLY answer using facts explicitly found in [YOUR_BACKGROUND_NOTES].
   If the fact is NOT there, you MUST deflect — but do it in YOUR voice based
   on YOUR PERSONALITY. An outgoing person might laugh it off or redirect with
   energy. A reserved person might give a quieter, shorter deflection. Do NOT
@@ -151,7 +151,7 @@ PREFERENCE:
   Set "action" to "answer" if explicitly stated before, "infer" otherwise.
 
 EXPERIENTIAL:
-  If the experience IS mentioned in [YOUR_CONVERSATION_HISTORY], share it
+  If the experience IS mentioned in [YOUR_BACKGROUND_NOTES], share it
   confidently. If it is NOT mentioned, deflect in character — your personality
   should shape how you sidestep the question. Someone expressive might joke
   about having bad memory. Someone quieter might just say they're not sure.
@@ -176,7 +176,7 @@ STRICT_CLASSIFICATION_PROMPT = f"""{CATEGORY_DEFINITIONS}
 RESPONSE RULES (apply to ALL categories equally):
   NEVER make up facts about yourself — not biographical details, not experiences,
   not preferences, not opinions.
-  If asked about ANYTHING not explicitly found in [YOUR_CONVERSATION_HISTORY],
+  If asked about ANYTHING not explicitly found in [YOUR_BACKGROUND_NOTES],
   deflect in YOUR voice based on YOUR PERSONALITY and communication style.
   Do NOT use generic filler phrases — the deflection should sound like something
   you would actually say. Your personality shapes how you sidestep questions.
@@ -208,6 +208,6 @@ IMPORTANT METADATA RULE:
   Even though you are instructed to confidently make up facts or guess in your "response",
   you MUST still accurately report "has_prior_knowledge" and "action".
   - If you are making up a story, guessing a preference, or inferring a fact to answer the user, "has_prior_knowledge" MUST be false and "action" should be "infer".
-  - Only set "has_prior_knowledge" to true if the specific fact is physically written in [YOUR_CONVERSATION_HISTORY], and "action" should be "answer".
+  - Only set "has_prior_knowledge" to true if the specific fact is physically written in [YOUR_BACKGROUND_NOTES], and "action" should be "answer".
 
 {OUTPUT_FORMAT}"""

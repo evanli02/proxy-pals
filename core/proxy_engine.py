@@ -53,7 +53,9 @@ def generate_reply(
                 "role": "system",
                 "content": (
                     "[RELEVANT THINGS YOU'VE SHARED BEFORE] - prior Q&A from "
-                    "your training; use only what is strictly relevant:\n" + context
+                    "your training; use only what is strictly relevant, and "
+                    "answer in a SHORT natural text message -- never recite "
+                    "these notes or unload several of them at once:\n" + context
                 ),
             })
     messages = system_blocks + history + [{"role": "user", "content": user_message}]
