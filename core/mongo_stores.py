@@ -177,6 +177,9 @@ class MongoInterviewStore:
                         pending_structured_id=doc.get("pending_structured_id", "") or "",
                         structured_answers=dict(doc.get("structured_answers", {})),
                         messages=list(doc.get("messages", [])),
+                        active_topic_id=doc.get("active_topic_id", "") or "",
+                        active_topic=doc.get("active_topic", "") or "",
+                        topic_followup_count=int(doc.get("topic_followup_count", 0) or 0),
                     )
                     log.info(f"Loaded interview state for {user_id} from MongoDB")
             except Exception as e:
@@ -216,6 +219,9 @@ class MongoInterviewStore:
                     "pending_structured_id": state.pending_structured_id,
                     "structured_answers": dict(state.structured_answers),
                     "messages": list(state.messages),
+                    "active_topic_id": state.active_topic_id,
+                    "active_topic": state.active_topic,
+                    "topic_followup_count": state.topic_followup_count,
                     "updated_at": datetime.datetime.utcnow(),
                 }
                 if profile_ready:

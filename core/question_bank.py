@@ -16,6 +16,24 @@ import json
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set
 
+# Preset conversation topics offered on every topic_choice card. Users may also
+# write their own. Deliberately a mix of revealing personality questions and
+# lighter surface-level openers.
+TOPIC_PRESETS = [
+    "What's your hottest take?",
+    "What's your dream vacation?",
+    "If you could only eat one cuisine for the rest of your life, what would it be?",
+    "What's a hobby or interest you could talk about for hours?",
+    "What do you like most about yourself?",
+    "What's your guilty pleasure?",
+    "What's a trait that makes you instantly like someone?",
+    "If money were no object, what's the first thing you'd buy?",
+    "What's something you wish you had in your life right now?",
+    "What's the best meal you've ever eaten?",
+    "What's a small thing that instantly ruins your day?",
+    "Free time: relaxing or being productive?",
+]
+
 
 class QuestionBank:
     def __init__(self, questions: List[Dict[str, Any]]):
@@ -57,11 +75,31 @@ class QuestionBank:
         return len(self._questions)
 
     def question_type(self, qid: str) -> str:
-        """'free_text' by default; structured types: likert_battery/list/long_text/choice."""
+        """'free_text' by default; structured types: likert_battery/list/long_text/choice.
+        'topic_choice' is its own thing (a topic-selection card, answered via
+        the topic endpoint, followed by a free conversation)."""
         return self._by_id.get(qid, {}).get("type", "free_text")
 
     def is_structured(self, qid: str) -> bool:
-        return self.question_type(qid) != "free_text"
+        return self.question_type(qid) not in ("free_text", "topic_choice")
+
+    def is_topic(self, qid: str) -> bool:
+        return self.question_type(qid) == "topic_choice"
+
+    def asks_verbatim(self, qid: str) -> bool:
+        """True for static questions (identity intake) that the engine asks
+        word-for-word with no LLM involvement."""
+        return bool(self._by_id.get(qid, {}).get("ask_verbatim", False))
+
+    def allows_followup(self, qid: str) -> bool:
+        """Whether the interviewer may ask a dynamic follow-up after this
+        question's answer. Identity questions (no_followup), survey cards, and
+        topic selections (which run their own follow-up loop) never get one."""
+        q = self._by_id.get(qid)
+        if not q:
+            return False
+        return (not self.is_structured(qid) and not self.is_topic(qid)
+                and not q.get("no_followup", False))
 
     def get(self, qid: str) -> Optional[Dict[str, Any]]:
         return self._by_id.get(qid)
@@ -83,6 +121,9 @@ class QuestionBank:
             p["recommended_chars"] = q.get("recommended_chars", 0)
         elif q.get("type") == "choice":
             p["options"] = q["options"]
+        elif q.get("type") == "topic_choice":
+            p["options"] = q.get("options") or list(TOPIC_PRESETS)
+            p["allow_custom"] = True
         return p
 
     def validate_answer(self, qid: str, answer: Any) -> Any:
@@ -142,3 +183,9 @@ def default_question_bank() -> QuestionBank:
 def question_bank_v2() -> QuestionBank:
     """The coalesced bank: base questions + SPC (TIPI, PVQ-21, context) + MBTI."""
     return QuestionBank.from_json(Path(__file__).resolve().parent / "questions_v2.json")
+
+
+def question_bank_v3() -> QuestionBank:
+    """The current flow: static identity intake -> three user-chosen topic
+    conversations -> the SPC survey (TIPI, PVQ-21, MBTI, context) -> catch-all."""
+    return QuestionBank.from_json(Path(__file__).resolve().parent / "questions_v3.json")

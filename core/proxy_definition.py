@@ -50,6 +50,11 @@ class ProxyDefinition:
     mbti: Optional[str] = None
     age: Optional[int] = None
     gender: Optional[str] = None
+    # identity-intake answers (hometown/location/occupation/...); shareable.
+    # May contain "name" -- build_system_prompt strips it before the model.
+    identity_facts: Optional[Dict[str, str]] = None
+    # the topics the user chose during training (surfaced on the proxy card)
+    topics: Optional[List[str]] = None
 
     def system_prompt(self) -> str:
         return build_system_prompt(
@@ -62,6 +67,8 @@ class ProxyDefinition:
             mbti=self.mbti,
             age=self.age,
             gender=self.gender,
+            identity_facts=self.identity_facts,
+            topics=self.topics,
         )
 
 
@@ -120,6 +127,8 @@ def record_to_definition(
         mbti=record.get("mbti") or None,
         age=age,
         gender=gender,
+        identity_facts=record.get("identity") or None,
+        topics=record.get("topics") or None,
     )
 
 

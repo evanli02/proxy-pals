@@ -36,12 +36,17 @@ const SHAPES = {
   square:'<rect x="21" y="28" width="58" height="58" rx="16" fill="{B}"/>',
   bean:  '<path d="M50 24 C72 24 80 44 76 62 C72 82 62 90 50 90 C38 90 28 82 24 62 C20 44 28 24 50 24 Z" fill="{B}"/>',
   egg:   '<ellipse cx="50" cy="58" rx="26" ry="34" fill="{B}"/>',
+  heart: '<path d="M50 88 C30 74 22 60 22 48 C22 35 32 29 40 29 C45 29 49 33 50 38 C51 33 55 29 60 29 C68 29 78 35 78 48 C78 60 70 74 50 88 Z" fill="{B}"/>',
+  tall:  '<rect x="27" y="22" width="46" height="68" rx="22" fill="{B}"/>',
+  cloud: '<ellipse cx="50" cy="66" rx="30" ry="22" fill="{B}"/><circle cx="32" cy="50" r="14" fill="{B}"/><circle cx="52" cy="42" r="17" fill="{B}"/><circle cx="68" cy="52" r="12" fill="{B}"/>',
 };
 const PATTERNS = {
   none: "",
   spots: '<circle cx="34" cy="72" r="4.5" fill="#FFFFFF" opacity=".35"/><circle cx="58" cy="80" r="3.5" fill="#FFFFFF" opacity=".35"/><circle cx="68" cy="66" r="3" fill="#FFFFFF" opacity=".35"/>',
   stripes: '<path d="M24 72 h52 M28 80 h44" stroke="#FFFFFF" opacity=".3" stroke-width="5" stroke-linecap="round"/>',
   belly: '<ellipse cx="50" cy="74" rx="16" ry="13" fill="#FFFFFF" opacity=".35"/>',
+  freckles: '<circle cx="31" cy="54" r="1.4" fill="#20241D" opacity=".3"/><circle cx="35" cy="57" r="1.4" fill="#20241D" opacity=".3"/><circle cx="28" cy="58" r="1.4" fill="#20241D" opacity=".3"/><circle cx="69" cy="54" r="1.4" fill="#20241D" opacity=".3"/><circle cx="65" cy="57" r="1.4" fill="#20241D" opacity=".3"/><circle cx="72" cy="58" r="1.4" fill="#20241D" opacity=".3"/>',
+  patch: '<rect x="29" y="68" width="13" height="11" rx="3" fill="#FFFFFF" opacity=".3" transform="rotate(-8 35 73)"/><path d="M31 70 l9 7 M40 70 l-9 7" stroke="#FFFFFF" opacity=".3" stroke-width="1.5"/>',
 };
 const EYES = {
   dot: '<circle cx="38" cy="46" r="4" fill="#20241D"/><circle cx="62" cy="46" r="4" fill="#20241D"/>',
@@ -52,6 +57,9 @@ const EYES = {
   big: '<circle cx="38" cy="46" r="7" fill="#FFF"/><circle cx="62" cy="46" r="7" fill="#FFF"/><circle cx="39.5" cy="47" r="3.5" fill="#20241D"/><circle cx="63.5" cy="47" r="3.5" fill="#20241D"/>',
   side: '<circle cx="41" cy="46" r="4" fill="#20241D"/><circle cx="65" cy="46" r="4" fill="#20241D"/>',
   shades: '<rect x="28" y="40" width="18" height="11" rx="4" fill="#20241D"/><rect x="54" y="40" width="18" height="11" rx="4" fill="#20241D"/><path d="M46 44 h8" stroke="#20241D" stroke-width="3"/>',
+  heart: '<text x="31" y="52" font-size="13" fill="#D4707F">♥</text><text x="55" y="52" font-size="13" fill="#D4707F">♥</text>',
+  angry: '<path d="M31 40 l14 5 M69 40 l-14 5" stroke="#20241D" stroke-width="3" stroke-linecap="round"/><circle cx="38" cy="49" r="3.5" fill="#20241D"/><circle cx="62" cy="49" r="3.5" fill="#20241D"/>',
+  closed: '<path d="M32 47 h12 M56 47 h12" stroke="#20241D" stroke-width="3" stroke-linecap="round"/>',
 };
 const MOUTH = {
   smile: '<path d="M40 62 q10 10 20 0" stroke="#20241D" stroke-width="3" fill="none" stroke-linecap="round"/>',
@@ -62,6 +70,8 @@ const MOUTH = {
   tongue: '<path d="M40 61 q10 9 20 0" stroke="#20241D" stroke-width="3" fill="none" stroke-linecap="round"/><path d="M47 65 q3 8 8 4 q1 -4 -1 -6 z" fill="#D4707F"/>',
   smirk: '<path d="M42 64 q9 6 18 -2" stroke="#20241D" stroke-width="3" fill="none" stroke-linecap="round"/>',
   ooo: '<circle cx="50" cy="64" r="5" fill="none" stroke="#20241D" stroke-width="3"/>',
+  frown: '<path d="M40 67 q10 -9 20 0" stroke="#20241D" stroke-width="3" fill="none" stroke-linecap="round"/>',
+  wavy: '<path d="M40 63 q5 4 10 0 q5 -4 10 0" stroke="#20241D" stroke-width="3" fill="none" stroke-linecap="round"/>',
 };
 const ACC = {
   none: "",
@@ -74,6 +84,11 @@ const ACC = {
   headphones: '<path d="M26 46 q0 -26 24 -26 q24 0 24 26" stroke="#20241D" stroke-width="4" fill="none"/><rect x="20" y="42" width="9" height="15" rx="4" fill="#20241D"/><rect x="71" y="42" width="9" height="15" rx="4" fill="#20241D"/>',
   horns: '<path d="M34 24 q-8 -8 -4 -16 q8 4 10 12 M66 24 q8 -8 4 -16 q-8 4 -10 12" fill="#A3524B"/>',
   beanie: '<path d="M27 34 q23 -26 46 0 l-2 6 q-21 -10 -42 0 z" fill="#6B5B9E"/><circle cx="50" cy="12" r="5" fill="#E4E0F0"/>',
+  tophat: '<rect x="36" y="2" width="28" height="18" rx="3" fill="#20241D"/><rect x="28" y="18" width="44" height="6" rx="3" fill="#20241D"/><rect x="36" y="13" width="28" height="4" fill="#A3524B"/>',
+  cap: '<path d="M30 27 q20 -20 40 0 l0 5 l-40 0 z" fill="#4A6FA5"/><path d="M68 27 q13 -1 15 7 l-15 2 z" fill="#4A6FA5"/><circle cx="50" cy="11" r="3.5" fill="#E0EDF0"/>',
+  glasses: '<circle cx="38" cy="46" r="9" fill="none" stroke="#20241D" stroke-width="2.5"/><circle cx="62" cy="46" r="9" fill="none" stroke="#20241D" stroke-width="2.5"/><path d="M47 46 h6 M29 46 h-5 M71 46 h5" stroke="#20241D" stroke-width="2.5"/>',
+  mustache: '<path d="M50 59 q-5 -6 -14 -1 q5 5 14 1 z M50 59 q5 -6 14 -1 q-5 5 -14 1 z" fill="#20241D"/>',
+  scarf: '<path d="M29 80 q21 11 42 0 l0 9 q-21 9 -42 0 z" fill="#A3524B"/><rect x="56" y="84" width="10" height="14" rx="4" fill="#A3524B"/>',
 };
 const BLUSH = {
   off: "",
@@ -203,21 +218,21 @@ async function renderInterview() {
   setProgress(status);
   (status.transcript || []).forEach(m => add(m.role === "user" ? "you" : "bot", m.content));
   if (!status.transcript || !status.transcript.length) {
-    add("bot", "Hey!! I'm your standin-in-training — excited to get to know you. Two tips before we start: answer in your natural texting style (your standin learns to sound like YOU, typos and all), and give as much detail as you feel like — the more you share, the better it can speak for you. Say hi whenever you're ready!");
+    add("bot", "Hey!! I'm your standin-in-training — excited to get to know you. Here's how this goes: a few quick intro questions, then YOU pick three topics you actually want to talk about, and we finish with a short survey. Answer in your natural texting style (your standin learns to sound like YOU, typos and all) — the more you share, the better it can speak for you. Say hi whenever you're ready!");
   }
 
   async function handle(result) {
     setProgress(result);
     cardHost.innerHTML = "";
+    if (result.reply) add("bot", result.reply);   // e.g. a topic wrap-up before a card
     if (result.profile_ready) {
       add("bot", "That's everything. Your standin is built and your profile is live.");
       chat.appendChild(el(`<div class="notice">Try it out: <a href="#/profile/${store.userId}">talk to your own standin</a> to hear how it represents you, or <a href="#/browse">browse people</a>.</div>`));
       form.style.display = "none";
       return;
     }
-    if (result.question) { form.style.display = "none"; renderSurveyCard(result.question, cardHost, handle); return; }
+    if (result.question) { form.style.display = "none"; renderSurveyCard(result.question, cardHost, handle, add); return; }
     form.style.display = "";
-    if (result.reply) add("bot", result.reply);
   }
 
   const skipBtn = $("#iv-skip", root), sendBtn = $("#iv-send", root);
@@ -246,12 +261,12 @@ async function renderInterview() {
   skipBtn.addEventListener("click", () =>
     turn(() => api("/api/interview/skip", { method: "POST" }), "(skipped)"));
 
-  if (status.question) { form.style.display = "none"; renderSurveyCard(status.question, cardHost, handle); }
+  if (status.question) { form.style.display = "none"; renderSurveyCard(status.question, cardHost, handle, add); }
   else if (status.profile_ready) handle(status);
 }
 
 /* ----- structured survey cards ----- */
-function renderSurveyCard(q, host, onResult) {
+function renderSurveyCard(q, host, onResult, addMessage) {
   const submit = async answer => {
     const btn = $(".js-submit", host); if (btn) { btn.disabled = true; btn.textContent = "Saving…"; }
     try {
@@ -322,6 +337,47 @@ function renderSurveyCard(q, host, onResult) {
     $(".js-submit", card).addEventListener("click", () => {
       if (!ta.value.trim()) { toast("Write a little something first."); return; }
       submit(ta.value.trim());
+    });
+    host.appendChild(card);
+
+  } else if (q.type === "topic_choice") {
+    const card = el(`<div class="card survey">
+      <p class="prompt">${esc(q.prompt)}</p>
+      <div class="topic-grid"></div>
+      <label class="fld">Or write your own</label>
+      <div class="row">
+        <input type="text" class="js-custom" placeholder="Anything you'd talk about with a friend…" maxlength="200" style="flex:1">
+      </div>
+      <div class="row spread" style="margin-top:12px">
+        <span></span>
+        <button class="btn btn-primary js-submit" disabled>Start talking</button>
+      </div></div>`);
+    let chosen = null;
+    const grid = $(".topic-grid", card), custom = $(".js-custom", card);
+    (q.options || []).forEach(opt => {
+      const b = el(`<button type="button">${esc(opt)}</button>`);
+      b.addEventListener("click", () => {
+        chosen = opt; custom.value = "";
+        grid.querySelectorAll("button").forEach(x => x.classList.toggle("sel", x === b));
+        $(".js-submit", card).disabled = false;
+      });
+      grid.appendChild(b);
+    });
+    custom.addEventListener("input", () => {
+      chosen = custom.value.trim() || null;
+      grid.querySelectorAll("button").forEach(x => x.classList.remove("sel"));
+      $(".js-submit", card).disabled = !chosen;
+    });
+    $(".js-submit", card).addEventListener("click", async () => {
+      if (!chosen) return;
+      const btn = $(".js-submit", card);
+      btn.disabled = true; btn.textContent = "Starting…";
+      try {
+        const result = await api("/api/interview/topic", { method: "POST",
+          body: { question_id: q.question_id, topic: chosen } });
+        if (addMessage) addMessage("you", chosen);  // echo the pick into the chat
+        onResult(result);
+      } catch (e) { toast(e.message); btn.disabled = false; btn.textContent = "Start talking"; }
     });
     host.appendChild(card);
 
@@ -464,16 +520,19 @@ async function renderMe() {
 
   /* avatar builder */
   const AV_OPTS = {
-    shape: ["blob", "round", "square", "bean", "egg"],
-    eyes: ["dot", "happy", "star", "sleepy", "wink", "big", "side", "shades"],
-    mouth: ["smile", "open", "flat", "cat", "grin", "tongue", "smirk", "ooo"],
-    acc: ["none", "sprout", "halo", "antenna", "bow", "crown", "flower", "headphones", "horns", "beanie"],
-    pattern: ["none", "spots", "stripes", "belly"],
+    shape: ["blob", "round", "square", "bean", "egg", "heart", "tall", "cloud"],
+    eyes: ["dot", "happy", "star", "sleepy", "wink", "big", "side", "shades", "heart", "angry", "closed"],
+    mouth: ["smile", "open", "flat", "cat", "grin", "tongue", "smirk", "ooo", "frown", "wavy"],
+    acc: ["none", "sprout", "halo", "antenna", "bow", "crown", "flower", "headphones", "horns", "beanie",
+          "tophat", "cap", "glasses", "mustache", "scarf"],
+    pattern: ["none", "spots", "stripes", "belly", "freckles", "patch"],
     blush: ["off", "on"],
     body: ["#2F5D50", "#C77E3C", "#6B5B9E", "#A3524B", "#3F7D8C", "#8C7B3F",
-           "#B85C79", "#4A6FA5", "#5E8C61", "#8A6552"],
+           "#B85C79", "#4A6FA5", "#5E8C61", "#8A6552", "#C98BB9", "#1F6F78",
+           "#54577C", "#7A8450"],
     bg: ["#DFE9E4", "#F4E6D5", "#E4E0F0", "#F0E4E4", "#E0EDF0", "#EFEBD8",
-         "#EAE0EC", "#DCEBE0", "#F1E3D3", "#E3E7F0"],
+         "#EAE0EC", "#DCEBE0", "#F1E3D3", "#E3E7F0", "#F0DDE2", "#DDE6F0",
+         "#E8F0DD", "#F0EBDD"],
   };
   const AV_DEFAULTS = { bg: "#DFE9E4", body: "#2F5D50", shape: "blob",
     eyes: "dot", mouth: "smile", acc: "none", pattern: "none", blush: "off" };
@@ -687,17 +746,33 @@ async function renderProfile(targetId) {
   const isSelf = targetId === store.userId;
   const anon = p.anonymous && !isSelf;
 
+  // chat-header summary: age/location/occupation + interests from training,
+  // so the viewer knows who they're talking to and where to start
+  let card = null;
+  try { card = await api(`/api/proxy/${targetId}/card`); } catch (e) { /* optional */ }
+  const meta = card
+    ? [card.age, card.location, card.occupation].filter(v => v != null && v !== "").map(esc).join(" · ")
+    : "";
+  const summary = card && (card.interests.length || card.topics.length)
+    ? `<div class="proxy-summary">
+         ${card.interests.length ? `<div class="row" style="gap:6px;flex-wrap:wrap">
+           <span class="hint">Into:</span>${card.interests.map(i => `<span class="why-chip">${esc(i)}</span>`).join("")}</div>` : ""}
+         ${card.topics.length ? `<p class="hint" style="margin:6px 0 0">Happy to talk about: ${card.topics.map(esc).join(" · ")}</p>` : ""}
+       </div>`
+    : "";
+
   const header = anon
     ? `<div class="row" style="align-items:center;gap:14px;margin-top:18px">
          ${avatarSVG(p.avatar, 84)}
          <div><h1 class="screen-title" style="margin:0">${esc(p.pseudonym)}</h1>
+         ${meta ? `<span class="hint">${meta}</span><br>` : ""}
          <span class="hint mono">anonymous standin</span></div>
        </div>
-       <p class="screen-sub" style="margin-top:10px">You'll see their real profile if you both like each other.</p>`
+       <p class="screen-sub" style="margin-top:10px">Only their name stays hidden — you'll see their real profile if you both like each other.</p>`
     : `<div class="row" style="align-items:center;gap:14px;margin-top:18px">
          ${avatarSVG(p.avatar, 64)}
          <div><h1 class="screen-title" style="margin:0">${esc(p.name)}<span class="hint">${p.age != null ? ", " + p.age : ""}${p.city ? " · " + esc(p.city) : ""}</span></h1>
-         <span class="hint">standin: ${esc(p.pseudonym)}</span></div>
+         <span class="hint">standin: ${esc(p.pseudonym)}${card && card.occupation ? " · " + esc(card.occupation) : ""}</span></div>
        </div>
        ${p.bio ? `<p class="screen-sub" style="margin-top:10px">${esc(p.bio)}</p>` : ""}
        ${(!isSelf && (p.photos || []).length) ? `<div class="gallery">${(p.photos || []).map(pid => `<img src="/api/photos/${pid}" alt="">`).join("")}</div>` : ""}`;
@@ -716,6 +791,7 @@ async function renderProfile(targetId) {
     ${likeBar}
     ${isSelf ? `<div class="notice">This is your own standin — what you hear is what others hear.</div>` : ""}
     ${!isSelf && p.transcript_visibility ? `<div class="row" style="margin-bottom:8px"><span class="badge">reviews standin chats</span><span class="hint">They can read this conversation.</span></div>` : ""}
+    ${summary}
     <div class="chat" id="p-chat"></div>
     <form class="composer" id="p-form">
       <input type="text" id="p-input" placeholder="Say something to ${esc(p.pseudonym || p.name)}" autocomplete="off">

@@ -25,10 +25,15 @@ import threading
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
 
-from .interview_prompt import get_interview_prompt
+from .interview_prompt import get_interview_prompt, get_topic_prompt
 
 from .interview_llm import InterviewLLM, OpenAIInterviewLLM, get_learning_model
 from .question_bank import QuestionBank, default_question_bank
+
+# Topic conversations: each chosen topic gets an opening ask plus 3-5 dynamic
+# follow-ups (the LLM may wrap up after the minimum; it must stop at the max).
+TOPIC_MIN_FOLLOWUPS = 3
+TOPIC_MAX_FOLLOWUPS = 5
 
 
 @dataclass
@@ -41,6 +46,10 @@ class InterviewState:
     pending_structured_id: str = ""
     structured_answers: Dict[str, Any] = field(default_factory=dict)
     messages: List[Dict[str, Any]] = field(default_factory=list)
+    # topic-conversation mode: set while a chosen topic is being discussed
+    active_topic_id: str = ""
+    active_topic: str = ""
+    topic_followup_count: int = 0
     lock: threading.RLock = field(default_factory=threading.RLock, repr=False)
 
 
@@ -88,18 +97,24 @@ def run_interview_turn(
     elif append_user:
         state.messages.append({"role": "user", "content": user_message})
 
+    # Mid-topic conversation: the topic loop owns the turn (its own follow-up
+    # budget and prompt) until the topic wraps and the flow advances.
+    if state.active_topic_id:
+        return _run_topic_turn(state, user_message, bank, llm, model, skip=skip)
+
     asked = set(state.asked_ids)
     prev_q = state.previous_question or ""
     prev_qid = state.previous_question_id or ""
 
     # dynamic follow-ups: at most ONE per main question, crafted by the LLM
     # to fit the user's actual answer (no predefined list). Not allowed on a
-    # skip, when there's no previous main, or -- crucially -- when the previous
-    # question was a STRUCTURED survey item (follow-ups are for conversation,
-    # not for probing someone's Likert ratings or routine write-ups).
+    # skip, when there's no previous main, or when the previous question
+    # disallows them (identity intake, STRUCTURED survey items, topic cards --
+    # follow-ups are for conversation, not for probing someone's Likert
+    # ratings, routine write-ups, or their name).
     followup_allowed = (
         bool(prev_qid)
-        and not bank.is_structured(prev_qid)
+        and bank.allows_followup(prev_qid)
         and len(state.follow_up_ids) == 0
         and not skip
     )
@@ -111,7 +126,27 @@ def run_interview_turn(
             reply_text=None, complete=True, profile_ready=True, assistant_message=None
         )
 
-    if bank.is_structured(next_main["id"]):
+    if bank.asks_verbatim(next_main["id"]):
+        # Identity intake: a static question asked word-for-word, no LLM, no
+        # follow-ups, identical for every user.
+        state.previous_question = next_main["main_question"]
+        state.previous_question_id = next_main["id"]
+        state.asked_ids.append(next_main["id"])
+        state.follow_up_ids = []
+        assistant_message = {
+            "role": "assistant",
+            "content": next_main["main_question"],
+            "metadata": {"need_followup": False,
+                         "main_question_id": next_main["id"],
+                         "identity": True},
+        }
+        state.messages.append(assistant_message)
+        return InterviewTurnResult(
+            reply_text=next_main["main_question"], complete=False,
+            profile_ready=False, assistant_message=assistant_message,
+        )
+
+    if bank.is_structured(next_main["id"]) or bank.is_topic(next_main["id"]):
         # A survey section is next -- but the answer the user JUST gave (to a
         # free-text question) still deserves its one follow-up chance. Ask the
         # LLM with no next-main on offer: either it crafts a tailored
@@ -136,10 +171,11 @@ def run_interview_turn(
                     reply_text=fu_text, complete=False, profile_ready=False,
                     assistant_message=assistant_message,
                 )
-        # Structured questions bypass the LLM entirely: the UI renders the
-        # card (Qualtrics-style matrix for batteries) and answers come back
-        # through submit_structured_answer. This is what keeps validated
-        # scale items scorable instead of dissolving into free text.
+        # Structured/topic questions bypass the LLM entirely: the UI renders
+        # the card (Qualtrics-style matrix for batteries, topic picker for
+        # topics) and answers come back through submit_structured_answer /
+        # submit_topic_choice. This is what keeps validated scale items
+        # scorable instead of dissolving into free text.
         return _issue_structured(state, next_main, bank)
 
     system = get_interview_prompt(
@@ -184,9 +220,13 @@ def run_interview_turn(
 
 
 def _issue_structured(
-    state: InterviewState, q: Dict[str, Any], bank: QuestionBank
+    state: InterviewState, q: Dict[str, Any], bank: QuestionBank,
+    reply_text: Optional[str] = None,
 ) -> InterviewTurnResult:
-    """Return the structured card; idempotent if it's already pending."""
+    """Return the structured/topic card; idempotent if it's already pending.
+    ``reply_text`` optionally carries a chat remark (e.g. a topic wrap-up) to
+    show BEFORE the card -- the card renders its own prompt, so the reply is
+    never the prompt itself."""
     payload = bank.payload(q["id"])
     if state.pending_structured_id != q["id"]:
         state.pending_structured_id = q["id"]
@@ -197,11 +237,152 @@ def _issue_structured(
                          "type": q.get("type")},
         })
     return InterviewTurnResult(
-        reply_text=q["main_question"],
+        reply_text=reply_text,
         complete=False,
         profile_ready=False,
         assistant_message=None,
         question_payload=payload,
+    )
+
+
+def _run_topic_turn(
+    state: InterviewState,
+    user_message: str,
+    bank: QuestionBank,
+    llm: InterviewLLM,
+    model: str,
+    skip: bool = False,
+) -> InterviewTurnResult:
+    """One turn inside an active topic conversation. The user message is
+    already appended. Follow-ups continue until the LLM wraps up (after the
+    minimum) or the budget runs out; then the flow advances past the topic."""
+    if skip:
+        # skipping mid-topic ends the topic early, no LLM wrap-up needed
+        return _end_topic(state, bank, llm, model, wrap_text=None)
+
+    count = state.topic_followup_count
+    must = count < TOPIC_MIN_FOLLOWUPS
+    may = count < TOPIC_MAX_FOLLOWUPS
+
+    system = get_topic_prompt(
+        state.active_topic, phase="conversation",
+        must_followup=must, may_followup=may, user_message=user_message,
+    )
+    messages = [{"role": "system", "content": system}] + [
+        {"role": m["role"], "content": m["content"]} for m in state.messages
+    ]
+    parsed = llm.next_turn(model=model, messages=messages) or {}
+    reply_text = (parsed.get("response") or "").strip()
+    need_followup = bool(parsed.get("need_followup", False))
+
+    if may and (need_followup or must) and reply_text:
+        state.topic_followup_count += 1
+        assistant_message = {
+            "role": "assistant",
+            "content": reply_text,
+            "metadata": {"need_followup": True,
+                         "main_question_id": state.active_topic_id,
+                         "topic_followup": True},
+        }
+        state.messages.append(assistant_message)
+        return InterviewTurnResult(
+            reply_text=reply_text, complete=False, profile_ready=False,
+            assistant_message=assistant_message,
+        )
+
+    # wrap up: the reply (if any) is a short closing remark with no question
+    if reply_text:
+        state.messages.append({
+            "role": "assistant",
+            "content": reply_text,
+            "metadata": {"main_question_id": state.active_topic_id,
+                         "topic_wrap": True},
+        })
+    return _end_topic(state, bank, llm, model, wrap_text=reply_text or None)
+
+
+def _end_topic(
+    state: InterviewState,
+    bank: QuestionBank,
+    llm: InterviewLLM,
+    model: str,
+    wrap_text: Optional[str],
+) -> InterviewTurnResult:
+    """Close the active topic and advance to whatever the bank has next."""
+    qid = state.active_topic_id
+    state.previous_question = state.active_topic
+    state.previous_question_id = qid
+    state.asked_ids.append(qid)
+    state.follow_up_ids = []
+    state.active_topic_id = ""
+    state.active_topic = ""
+    state.topic_followup_count = 0
+
+    nxt = bank.next_main(set(state.asked_ids))
+    if nxt is None:
+        return InterviewTurnResult(
+            reply_text=wrap_text, complete=True, profile_ready=True,
+            assistant_message=None,
+        )
+    if bank.is_structured(nxt["id"]) or bank.is_topic(nxt["id"]):
+        return _issue_structured(state, nxt, bank, reply_text=wrap_text)
+    # a conversational question is next: bridge straight into it so the chat
+    # never goes silent (same rationale as the survey bridge)
+    return run_interview_turn(
+        state, _SURVEY_BRIDGE_MESSAGE, bank, llm, model, append_user=False,
+    )
+
+
+def submit_topic_choice(
+    state: InterviewState,
+    question_id: str,
+    topic: Any,
+    bank: QuestionBank,
+    llm: InterviewLLM,
+    model: str,
+) -> InterviewTurnResult:
+    """Record the user's chosen topic (preset or self-written) and open the
+    topic conversation with an LLM-crafted first question. Raises ValueError
+    on invalid or out-of-order submissions."""
+    next_main = bank.next_main(set(state.asked_ids))
+    if next_main is None:
+        return InterviewTurnResult(
+            reply_text=None, complete=True, profile_ready=True, assistant_message=None
+        )
+    if question_id != next_main["id"] or not bank.is_topic(question_id):
+        raise ValueError(f"Expected a topic choice for {next_main['id']}, got {question_id}")
+    topic = (str(topic or "")).strip()
+    if not topic:
+        raise ValueError("Pick a topic or write your own")
+    topic = topic[:200]
+
+    state.structured_answers[question_id] = topic
+    state.pending_structured_id = ""
+    state.messages.append({
+        "role": "user",
+        "content": topic,
+        "metadata": {"topic_choice_for": question_id},
+    })
+    state.active_topic_id = question_id
+    state.active_topic = topic
+    state.topic_followup_count = 0
+
+    system = get_topic_prompt(topic, phase="opening")
+    messages = [{"role": "system", "content": system}] + [
+        {"role": m["role"], "content": m["content"]} for m in state.messages
+    ]
+    parsed = llm.next_turn(model=model, messages=messages) or {}
+    # if the LLM fails, fall back to asking the chosen topic verbatim
+    reply_text = (parsed.get("response") or "").strip() or topic
+    assistant_message = {
+        "role": "assistant",
+        "content": reply_text,
+        "metadata": {"main_question_id": question_id, "topic_opening": True},
+    }
+    state.messages.append(assistant_message)
+    return InterviewTurnResult(
+        reply_text=reply_text, complete=False, profile_ready=False,
+        assistant_message=assistant_message,
     )
 
 
@@ -310,6 +491,16 @@ class InterviewEngine:
         state = self.store.get_or_create(user_id)
         with state.lock:
             result = run_interview_turn(state, "", self.bank, self.llm, self.model, skip=True)
+            self.store.save(state, profile_ready=result.profile_ready)
+            return result
+
+    def choose_topic(self, *, user_id: str, question_id: str, topic: Any) -> InterviewTurnResult:
+        """The user picked (or wrote) a topic on a topic_choice card."""
+        state = self.store.get_or_create(user_id)
+        with state.lock:
+            result = submit_topic_choice(
+                state, question_id, topic, self.bank, self.llm, self.model
+            )
             self.store.save(state, profile_ready=result.profile_ready)
             return result
 

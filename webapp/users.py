@@ -38,15 +38,21 @@ _PSEUDO_NOUN = ["Fox", "Otter", "Comet", "Cactus", "Sparrow", "Noodle", "Glacier
                 "Puffin", "Meteor", "Fern", "Walrus", "Lantern", "Mango", "Yeti"]
 
 AVATAR_BG = ["#DFE9E4", "#F4E6D5", "#E4E0F0", "#F0E4E4", "#E0EDF0", "#EFEBD8",
-             "#EAE0EC", "#DCEBE0", "#F1E3D3", "#E3E7F0"]
+             "#EAE0EC", "#DCEBE0", "#F1E3D3", "#E3E7F0", "#F0DDE2", "#DDE6F0",
+             "#E8F0DD", "#F0EBDD"]
 AVATAR_BODY = ["#2F5D50", "#C77E3C", "#6B5B9E", "#A3524B", "#3F7D8C", "#8C7B3F",
-               "#B85C79", "#4A6FA5", "#5E8C61", "#8A6552"]
-AVATAR_SHAPE = ["blob", "round", "square", "bean", "egg"]
-AVATAR_EYES = ["dot", "happy", "star", "sleepy", "wink", "big", "side", "shades"]
-AVATAR_MOUTH = ["smile", "open", "flat", "cat", "grin", "tongue", "smirk", "ooo"]
+               "#B85C79", "#4A6FA5", "#5E8C61", "#8A6552", "#C98BB9", "#1F6F78",
+               "#54577C", "#7A8450"]
+AVATAR_SHAPE = ["blob", "round", "square", "bean", "egg", "heart", "tall", "cloud"]
+AVATAR_EYES = ["dot", "happy", "star", "sleepy", "wink", "big", "side", "shades",
+               "heart", "angry", "closed"]
+AVATAR_MOUTH = ["smile", "open", "flat", "cat", "grin", "tongue", "smirk", "ooo",
+                "frown", "wavy"]
 AVATAR_ACC = ["none", "sprout", "halo", "antenna", "bow", "crown", "flower",
-              "headphones", "horns", "beanie"]
-AVATAR_PATTERN = ["none", "none", "spots", "stripes", "belly"]  # none weighted
+              "headphones", "horns", "beanie", "tophat", "cap", "glasses",
+              "mustache", "scarf"]
+AVATAR_PATTERN = ["none", "none", "spots", "stripes", "belly",
+                  "freckles", "patch"]  # none weighted
 
 
 def random_pseudonym() -> str:

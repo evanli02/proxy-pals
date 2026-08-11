@@ -134,7 +134,21 @@ textarea { resize: vertical; min-height: 90px; }
 }
 .choice-grid button.sel { background: var(--proxy); border-color: var(--proxy); color: #FFF; }
 @media (max-width: 480px) { .choice-grid { grid-template-columns: repeat(4, 1fr); } }
+.topic-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px; margin: 12px 0; }
+.topic-grid button {
+  padding: 10px 12px; text-align: left; font-size: .9rem; background: #FFF;
+  border: 1px solid var(--line); border-radius: 8px; cursor: pointer;
+}
+.topic-grid button:hover { border-color: var(--proxy); }
+.topic-grid button.sel { background: var(--proxy); border-color: var(--proxy); color: #FFF; }
+@media (max-width: 480px) { .topic-grid { grid-template-columns: 1fr; } }
 .charcount { text-align: right; }
+
+/* ---------- standin chat header summary ---------- */
+.proxy-summary {
+  padding: 10px 14px; margin-bottom: 8px; border: 1px solid var(--line);
+  border-radius: 10px; background: var(--proxy-soft);
+}
 
 /* ---------- profiles ---------- */
 .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 14px; }

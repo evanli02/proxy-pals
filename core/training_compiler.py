@@ -28,7 +28,7 @@ import os
 from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, List, Optional
 
-from .interview import InterviewState
+from .interview import InterviewState, SKIP_MARKER
 from .question_bank import QuestionBank
 from .spc_scoring import score_pvq, score_tipi
 
@@ -59,6 +59,11 @@ class CompiledTraining:
     mbti: Optional[str]
     messages: List[Dict[str, Any]]       # interview transcript (for samples)
     qa_items: List[Dict[str, Any]] = field(default_factory=list)
+    # identity intake answers keyed by identity_field (name, hometown,
+    # location, occupation, ...). The proxy shares everything EXCEPT name.
+    identity: Dict[str, str] = field(default_factory=dict)
+    # the three topics the user chose to talk about during training
+    topics: List[str] = field(default_factory=list)
 
 
 # --- helpers -------------------------------------------------------------------
@@ -160,6 +165,8 @@ def default_persist(compiled: CompiledTraining) -> None:
                 "personality": compiled.personality_text,
                 "spc_raw": compiled.spc_raw,
                 "mbti": compiled.mbti,
+                "identity": compiled.identity,
+                "topics": compiled.topics,
                 "spc_updated_at": datetime.datetime.utcnow(),
                 "updated_at": datetime.datetime.utcnow(),
             }},
@@ -201,6 +208,23 @@ def compile_training(
         context["weekend"] = answers["SPC_WEEKEND"]
 
     mbti = answers.get("SPC_MBTI") or None
+
+    # identity intake: raw answers keyed by identity_field, skips excluded
+    identity: Dict[str, str] = {}
+    for q in getattr(bank, "_questions", []):
+        f = q.get("identity_field")
+        if not f:
+            continue
+        ans = _find_answer_to(state, q["id"])
+        if ans and ans != SKIP_MARKER:
+            identity[f] = ans
+
+    # the topics the user chose (stored as structured answers by the engine)
+    topics = [
+        answers[q["id"]]
+        for q in getattr(bank, "_questions", [])
+        if q.get("type") == "topic_choice" and answers.get(q["id"])
+    ]
 
     try:
         personality_text = personality_generator(personality_scores, value_scores)
@@ -249,4 +273,6 @@ def compile_training(
         mbti=mbti,
         messages=list(state.messages),
         qa_items=qa_items,
+        identity=identity,
+        topics=topics,
     )

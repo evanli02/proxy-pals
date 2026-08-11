@@ -26,8 +26,14 @@ from .interview import (
     InterviewTurnResult,
     InMemoryInterviewStore,
 )
-from .question_bank import QuestionBank, default_question_bank, question_bank_v2
-from .interview import submit_structured_answer
+from .question_bank import (
+    QuestionBank,
+    TOPIC_PRESETS,
+    default_question_bank,
+    question_bank_v2,
+    question_bank_v3,
+)
+from .interview import submit_structured_answer, submit_topic_choice
 from .spc_scoring import score_tipi, score_pvq
 from .training_compiler import (
     CompiledTraining,
@@ -36,7 +42,7 @@ from .training_compiler import (
     decomposed_pairs_to_qa_items,
 )
 from .interview_llm import OpenAIInterviewLLM, InterviewLLM, get_learning_model
-from .interview_prompt import get_interview_prompt
+from .interview_prompt import get_interview_prompt, get_topic_prompt
 from .explore import (
     UserFeatures,
     build_user_features,
@@ -68,9 +74,12 @@ __all__ = [
     "InterviewTurnResult",
     "InMemoryInterviewStore",
     "QuestionBank",
+    "TOPIC_PRESETS",
     "default_question_bank",
     "question_bank_v2",
+    "question_bank_v3",
     "submit_structured_answer",
+    "submit_topic_choice",
     "score_tipi",
     "score_pvq",
     "CompiledTraining",
@@ -81,6 +90,7 @@ __all__ = [
     "InterviewLLM",
     "get_learning_model",
     "get_interview_prompt",
+    "get_topic_prompt",
     "UserFeatures",
     "build_user_features",
     "score_pair",

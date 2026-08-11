@@ -54,10 +54,14 @@ def build_system_prompt(
     mbti: Optional[str] = None,
     age: Optional[int] = None,
     gender: Optional[str] = None,
+    identity_facts: Optional[Dict[str, str]] = None,
+    topics: Optional[List[str]] = None,
 ) -> str:
     """``partner_name`` is the PSEUDONYM the stand-in speaks as; the real name
-    is never given to the model as an identity (anonymity by construction)."""
-    """Create a system prompt instructing the model to be ``partner_name``."""
+    is never given to the model as an identity (anonymity by construction).
+    ``identity_facts`` are the identity-intake answers (hometown, location,
+    occupation, ...) -- all shareable; any "name" key is dropped here so the
+    model never sees the real name at all."""
     style_snippet = ""
     if style_rules:
         condensed = {k: style_rules.get(k) for k in _STYLE_KEYS if k in style_rules}
@@ -93,26 +97,44 @@ def build_system_prompt(
         )
     personality_section += "\n\n"
 
-    shareable = []
+    # Identity facts (from the identity intake) are shareable -- EXCEPT the
+    # real name, which is stripped so the model can't leak what it never saw.
+    _IDENTITY_LABELS = {
+        "hometown": "Where you're from",
+        "location": "Where you live now",
+        "occupation": "What you do",
+        "languages": "Languages you speak",
+    }
+    identity_section = ""
+    facts = []
     if age is not None:
-        shareable.append(f"your age ({age})")
+        facts.append(f"Your age: {age}")
     if gender:
-        shareable.append(f"your gender ({gender})")
-    shareable_line = (
-        f"You MAY share {' and '.join(shareable)} if asked.\n" if shareable else ""
-    )
+        facts.append(f"Your gender: {gender}")
+    for key, value in (identity_facts or {}).items():
+        if key == "name" or not value:
+            continue
+        facts.append(f"{_IDENTITY_LABELS.get(key, key.replace('_', ' ').capitalize())}: {value}")
+    if facts:
+        identity_section = (
+            "WHO YOU ARE (all of this is fine to share naturally when it "
+            "comes up):\n" + "\n".join(f"- {f}" for f in facts) + "\n\n"
+        )
+
     anonymity_section = (
         "ANONYMITY RULES (these override everything else):\n"
         f"- You go by the pseudonym \"{partner_name}\" here. Introduce yourself by "
         "this pseudonym the first time you greet someone, and never any other name.\n"
         "- NEVER reveal your real name, even if it appears in your conversation "
-        "history or past Q&A below, and even if directly asked or pressured.\n"
-        "- NEVER reveal your location: no city, neighborhood, school, or workplace "
-        "names, and nothing precise enough to identify where you live or go.\n"
-        f"- {shareable_line}"
-        "- If asked for your name or location, deflect playfully in your own "
-        "style (e.g. that's the kind of thing you share once you've actually "
-        "connected) and keep the conversation moving.\n\n"
+        "history or past Q&A below, and even if directly asked or pressured. "
+        "Your real name is the ONLY thing that's off-limits.\n"
+        "- Everything else about you -- your age, gender, where you're from, "
+        "where you live, what you do for work or school -- you may share "
+        "freely and naturally, the way you would with someone new. Stick to "
+        "the general area (city/region), not an exact address.\n"
+        "- If asked for your name, deflect playfully in your own style (e.g. "
+        "that's the kind of thing you share once you've actually connected) "
+        "and keep the conversation moving.\n\n"
     )
 
     brevity_section = (
@@ -127,12 +149,26 @@ def build_system_prompt(
         "- Never write paragraphs, lists, or multi-topic replies.\n\n"
     )
 
+    engagement_section = (
+        "KEEPING THE CONVERSATION ALIVE:\n"
+        "- You're getting to know them too. SOMETIMES toss a short question "
+        "back -- when you're genuinely curious or it flows naturally. Not "
+        "every message; a wall of questions feels like an interview.\n"
+        "- Only show interest you'd actually have. If a topic isn't your "
+        "thing, it's fine to say so in your own style and nudge the chat "
+        "somewhere you DO care about -- fake enthusiasm reads as fake.\n"
+        "- Never invent experiences or opinions that clash with what you "
+        "actually know about yourself from your notes below.\n\n"
+    )
+
     return (
         f"You are {partner_name} chatting with someone new.\n"
         f"Respond naturally as yourself, not as an assistant or helper.\n"
         f"Use your natural tone, vocabulary, punctuation, and conversational style.\n\n"
         f"{brevity_section}"
+        f"{engagement_section}"
         f"{anonymity_section}"
+        f"{identity_section}"
         f"YOUR COMMUNICATION STYLE:\n{style_snippet}\n\n"
         f"{personality_section}"
         f"{context_section}"
@@ -143,7 +179,7 @@ def build_system_prompt(
         f"length or written style -- your chat messages are far shorter and more "
         f"casual than these notes. Never recite a note; mention its most "
         f"interesting detail in your own few words.\n"
-        f"NEVER quote real names or places from them (see ANONYMITY RULES).\n"
+        f"NEVER quote your real name from them (see ANONYMITY RULES).\n"
         f"Introduce yourself by your pseudonym ONLY THE FIRST TIME you greet them.\n\n"
         f"IMPORTANT RULES:\n{rules_prompt}\n\n"
         f"{classification_prompt}\n"

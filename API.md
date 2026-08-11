@@ -1,6 +1,6 @@
 # Standin API Reference
 
-For client developers (KMP/mobile/web). Live interactive docs: `/docs` · machine spec for codegen: `/openapi.json` · verify deployed version: `GET /api/health` → `{"ok": true, "version": "0.4.1"}`.
+For client developers (KMP/mobile/web). Live interactive docs: `/docs` · machine spec for codegen: `/openapi.json` · verify deployed version: `GET /api/health` → `{"ok": true, "version": "0.5.0"}`.
 
 **Base URL:** `https://<your-app>.herokuapp.com`
 
@@ -10,7 +10,7 @@ For client developers (KMP/mobile/web). Live interactive docs: `/docs` · machin
 - **Errors:** always `{"detail": "human-readable reason"}` with: `401` bad/missing token · `403` action not allowed (e.g. DM without connection) · `404` not found / not visible to you · `409` conflict (duplicate email, photo cap, not trained yet) · `413`/`415` photo too big / wrong type · `422` validation (body shape, bad survey answer — detail explains which field).
 - **IDs:** users `u_<hex>`, conversations `px_<hex>`, photos `ph_<hex>`, knowledge `qa_<hex>`.
 - **Timestamps:** ISO-8601 strings, UTC.
-- **The anonymity rule (read this first):** users are anonymous to each other — pseudonym + avatar only — until a **mutual like** exists. Several endpoints return different shapes depending on connection status; each is documented below.
+- **The anonymity rule (read this first):** the only thing that stays hidden between strangers is the **real name** (profiles show pseudonym + avatar until a **mutual like** exists). A standin freely shares its owner's age, gender, location, and occupation — and `GET /api/proxy/{id}/card` surfaces those in the chat header. Several endpoints return different shapes depending on connection status; each is documented below.
 
 ---
 
@@ -64,13 +64,13 @@ All string values. Omitted keys fall back to defaults.
 
 | key | values |
 |---|---|
-| `shape` | `blob` `round` `square` `bean` `egg` |
-| `eyes` | `dot` `happy` `star` `sleepy` `wink` `big` `side` `shades` |
-| `mouth` | `smile` `open` `flat` `cat` `grin` `tongue` `smirk` `ooo` |
-| `acc` | `none` `sprout` `halo` `antenna` `bow` `crown` `flower` `headphones` `horns` `beanie` |
-| `pattern` | `none` `spots` `stripes` `belly` |
+| `shape` | `blob` `round` `square` `bean` `egg` `heart` `tall` `cloud` |
+| `eyes` | `dot` `happy` `star` `sleepy` `wink` `big` `side` `shades` `heart` `angry` `closed` |
+| `mouth` | `smile` `open` `flat` `cat` `grin` `tongue` `smirk` `ooo` `frown` `wavy` |
+| `acc` | `none` `sprout` `halo` `antenna` `bow` `crown` `flower` `headphones` `horns` `beanie` `tophat` `cap` `glasses` `mustache` `scarf` |
+| `pattern` | `none` `spots` `stripes` `belly` `freckles` `patch` |
 | `blush` | `off` `on` |
-| `body`, `bg` | any hex color (pickers offer 10 each; see `webapp/static/app.js` for SVG part definitions to render natively) |
+| `body`, `bg` | any hex color (pickers offer 14 each; see `webapp/static/app.js` for SVG part definitions to render natively) |
 
 ---
 
@@ -89,32 +89,40 @@ jpeg/png/webp, ≤5MB, max 6 per user (`415`/`413`/`409`).
 
 ## Training (the interview)
 
-The interview is a **dual-mode chat**: free-text turns with an LLM interviewer, interleaved with structured survey cards. One response model everywhere:
+The interview runs in **three phases**, all through the same chat endpoints:
+
+1. **Identity intake** — a short static set of questions (name, hometown, current location, occupation, languages), asked word-for-word with no follow-ups. Everything except the name is later shared by the standin.
+2. **Topic conversations ×3** — a `topic_choice` card offers preset topics (plus a free-text "write your own"); the user picks one via `POST /api/interview/topic`, then chats about it. The interviewer asks 3–5 natural follow-ups per topic, then the next topic card appears.
+3. **SPC survey** — the structured cards (TIPI, PVQ, MBTI, loves/hates, routines), unchanged, plus a final "anything else" free-text question.
+
+One response model everywhere:
 
 ```json
 // InterviewOut
 {
-  "reply": "nice!! okay next one — what's your guilty pleasure?",  // or null
+  "reply": "nice!! so what got you into that?",  // or null
   "complete": false,
   "profile_ready": false,       // true == training done, profile went live
   "asked_count": 4,
-  "total_main_questions": 15,
-  "question": null,             // or a survey card object (below)
+  "total_main_questions": 16,
+  "question": null,             // or a survey/topic card object (below)
   "transcript": null            // only populated by GET /status
 }
 ```
 
 **Client loop:**
 1. `POST /api/interview/message` `{"text": "..."}`.
-2. If `question` is `null` → show `reply`, keep chatting.
-3. If `question` is an object → hide the composer, render the card by `question.type`, submit via `POST /api/interview/answer` `{"question_id": "...", "answer": <shape below>}`. The response may chain directly into the next card.
-4. `POST /api/interview/skip` (no body) skips the current **free-text** question only.
+2. Always show `reply` when non-null (it can accompany a card, e.g. a topic wrap-up remark). If `question` is `null` → keep chatting.
+3. If `question` is an object → hide the composer, render the card by `question.type`. Submit survey cards via `POST /api/interview/answer` `{"question_id": "...", "answer": <shape below>}`; submit **`topic_choice`** cards via `POST /api/interview/topic` `{"question_id": "...", "topic": "..."}`. The response may chain directly into the next card.
+4. `POST /api/interview/skip` (no body) skips the current **free-text** question (mid-topic it ends the topic early).
 5. When `profile_ready` flips true, training is compiled and the profile is live. **The request that flips it takes 10–30s** — show a "building your standin" state, don't time out early, never resubmit.
 6. On app launch, `GET /api/interview/status` → `transcript` (list of `{"role": "user"|"assistant", "content": "..."}`) and any pending `question` to restore state.
 
-### Survey card types & answer shapes
+### Card types & answer shapes
 
 `question` always has `question_id`, `type`, `prompt`, `optional` (bool), plus type-specific fields:
+
+**`topic_choice`** — pick a conversation topic. Extra fields: `options` (preset topic strings) and `allow_custom: true` (render a free-text input too). Submit via `POST /api/interview/topic` `{"question_id": "...", "topic": "<preset or custom, ≤200 chars>"}` → the reply opens the topic conversation; continue via `/message`. Wrong/out-of-order card or blank topic → `422`.
 
 **`likert_battery`** — Qualtrics-style matrix. Extra fields: `scale_labels` (7 strings, 1→7) and `items` (`[{"id": "tipi_1", "text": "Extraverted, enthusiastic."}, ...]`).
 Answer: **every** item rated `{"tipi_1": 6, "tipi_2": 3, ..., "tipi_10": 4}`, ints 1–7. Missing/out-of-range → `422`.
@@ -161,6 +169,15 @@ Ranked by compatibility; `chips` (0–3 strings) explain why — render them on 
 ---
 
 ## Standin chat
+
+### GET /api/proxy/{target_id}/card → 200
+```json
+{ "pseudonym": "Mossy Otter", "age": 23,
+  "location": "Ithaca, NY", "hometown": "Buffalo, NY", "occupation": "CS student",
+  "interests": ["basketball", "ramen", "hiking"],
+  "topics": ["What's your hottest take?", "dream vacations"] }
+```
+The chat-header summary: render it near the standin's name **above the chat box** so the viewer knows who they're talking to and where to start. `age`/`location`/`hometown`/`occupation` come from the identity intake (never the real name); `interests` are things they love from training; `topics` are the topics they chose to talk about. Any field may be `null`/empty for legacy or untrained profiles. `404` if the target isn't live (self-view always works).
 
 ### POST /api/proxy/{target_id}/message → 200
 ```json

@@ -2,8 +2,8 @@
 Pivot smoke test -- offline. Covers the anonymous-social rework:
   1. browse returns ONLY pseudonym+avatar (no name/age/city/photos)
   2. stranger profile view is anonymous; leaks nothing
-  3. proxy speaks as the pseudonym; prompt forbids real name/location and
-     offers age/gender as shareable
+  3. proxy speaks as the pseudonym; prompt forbids the real name (ONLY the
+     name -- age/gender/location/occupation are shareable)
   4. the full like arc: like -> incoming (anonymous) -> like back -> mutual ->
      full profiles unlock -> DMs allowed; DMs forbidden before mutual
   5. can't like yourself; likes to non-live targets 404
@@ -107,8 +107,10 @@ def test_proxy_speaks_as_pseudonym_with_anonymity_rules():
     assert "You are Mossy Otter" in sys
     assert "Alice Realname" not in sys, "real name must never reach the model as identity"
     assert "NEVER reveal your real name" in sys
-    assert "NEVER reveal your location" in sys
-    assert "your age (23)" in sys and "your gender (female)" in sys
+    assert "Your real name is the ONLY thing that's off-limits" in sys
+    # location/age/gender are shareable now -- only the name stays hidden
+    assert "NEVER reveal your location" not in sys
+    assert "Your age: 23" in sys and "Your gender: female" in sys
 
 
 def test_full_like_arc_and_dm_gating():

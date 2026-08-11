@@ -12,7 +12,9 @@ Routes:
   GET  /api/users                      -- live profiles (lo-fi browse placeholder)
   GET  /api/users/{user_id}            -- public profile (404 unless live)
   POST /api/interview/message          -- onboarding interview turn
+  POST /api/interview/topic            -- choose a topic to discuss (x3)
   GET  /api/interview/status           -- progress + profile_ready
+  GET  /api/proxy/{target_id}/card     -- chat-header summary (age/location/interests)
   POST /api/proxy/{target_id}/message  -- viewer talks to target's proxy
   GET  /api/health
 
@@ -40,7 +42,7 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, EmailStr, Field
 
-from core import InterviewEngine, ProxyEngine, compile_training, default_persist, question_bank_v2
+from core import InterviewEngine, ProxyEngine, compile_training, default_persist, question_bank_v3
 from core.proxy_definition import ProxyDefinitionCache
 from core.proxy_engine import default_retriever
 from core.mongo_stores import (
@@ -202,14 +204,15 @@ class ReviewOut(BaseModel):
 class QuestionCardOut(BaseModel):
     """A structured survey card. Render by `type`; answer shapes in API.md."""
     question_id: str
-    type: Literal["likert_battery", "list", "long_text", "choice"]
+    type: Literal["likert_battery", "list", "long_text", "choice", "topic_choice"]
     prompt: str
     optional: bool = Field(description="True = null answer allowed (skip)")
     scale_labels: Optional[List[str]] = Field(default=None, description="likert_battery: 7 labels, 1..7")
     items: Optional[List[Dict[str, str]]] = Field(default=None, description="likert_battery: [{id, text}]")
     min_items: Optional[int] = Field(default=None, description="list: minimum entries")
     recommended_chars: Optional[int] = Field(default=None, description="long_text: advisory length")
-    options: Optional[List[str]] = Field(default=None, description="choice: pick one")
+    options: Optional[List[str]] = Field(default=None, description="choice/topic_choice: preset options")
+    allow_custom: Optional[bool] = Field(default=None, description="topic_choice: user may write their own topic")
 
 
 class TranscriptMessageOut(BaseModel):
@@ -281,10 +284,28 @@ class StructuredAnswerIn(BaseModel):
     answer: Any = None  # None allowed for optional questions (e.g. MBTI skip)
 
 
+class TopicChoiceIn(BaseModel):
+    question_id: str
+    topic: str = Field(min_length=1, max_length=200,
+                       description="A preset option or the user's own topic")
+
+
 class ProxyOut(BaseModel):
     conversation_id: str
     reply: str
     target_visibility_on: bool
+
+
+class ProxyCardOut(BaseModel):
+    """Header summary shown above a standin chat: who you're talking to and
+    what they're into, so the viewer knows where to start."""
+    pseudonym: str
+    age: Optional[int] = None
+    location: Optional[str] = Field(default=None, description="Where they live (from training)")
+    hometown: Optional[str] = None
+    occupation: Optional[str] = None
+    interests: List[str] = Field(default_factory=list, description="Things they love (from training)")
+    topics: List[str] = Field(default_factory=list, description="Topics they chose to talk about in training")
 
 
 # --- app factory ----------------------------------------------------------------
@@ -323,7 +344,7 @@ def build_deps() -> Dict[str, Any]:
             log.error(f"explore feature rebuild failed for {state.user_id}: {e}")
 
     return {
-        "interview": InterviewEngine(store=MongoInterviewStore(), bank=question_bank_v2()),
+        "interview": InterviewEngine(store=MongoInterviewStore(), bank=question_bank_v3()),
         "proxy": proxy,
         "users": users,
         "persist_gap": persist_unanswered_question,
@@ -361,7 +382,7 @@ def create_app(deps: Optional[Dict[str, Any]] = None) -> FastAPI:
             return None
         return col.find_one({"user_id": user_id})
 
-    APP_VERSION = "0.4.2"  # bump on every deploy-worthy change
+    APP_VERSION = "0.5.0"  # bump on every deploy-worthy change
     app = FastAPI(title="Proxy Social Prototype API", version=APP_VERSION)
 
     # --- identity -------------------------------------------------------------
@@ -673,16 +694,30 @@ def create_app(deps: Optional[Dict[str, Any]] = None) -> FastAPI:
             raise HTTPException(status_code=422, detail=str(e))
         return _interview_out(result, user_id)
 
+    @app.post("/api/interview/topic", response_model=InterviewOut, tags=["Training"], summary="Choose a conversation topic (preset or your own)")
+    def interview_topic(body: TopicChoiceIn, user_id: str = Depends(get_current_user)):
+        """Answer a topic_choice card. The reply is the interviewer opening
+        the topic conversation; keep chatting via /api/interview/message."""
+        try:
+            result = interview.choose_topic(
+                user_id=user_id, question_id=body.question_id, topic=body.topic
+            )
+        except ValueError as e:
+            raise HTTPException(status_code=422, detail=str(e))
+        return _interview_out(result, user_id)
+
     @app.get("/api/interview/status", response_model=InterviewOut, tags=["Training"], summary="Progress + transcript + pending card (restore on launch)")
     def interview_status(user_id: str = Depends(get_current_user)):
         state = interview.store.get_or_create(user_id)
         ready = interview.bank.is_complete(set(state.asked_ids))
-        # restore the pending structured card after a reload
+        # restore the pending structured/topic card after a reload (never
+        # mid-topic: an active topic conversation continues as plain chat)
         pending_q = None
-        if not ready:
+        if not ready and not state.active_topic_id:
             nxt = interview.bank.next_main(set(state.asked_ids))
-            if nxt is not None and interview.bank.is_structured(nxt["id"]) \
-                    and state.pending_structured_id == nxt["id"]:
+            if nxt is not None and state.pending_structured_id == nxt["id"] \
+                    and (interview.bank.is_structured(nxt["id"])
+                         or interview.bank.is_topic(nxt["id"])):
                 pending_q = interview.bank.payload(nxt["id"])
         transcript = [
             {"role": m["role"], "content": m["content"]}
@@ -699,6 +734,38 @@ def create_app(deps: Optional[Dict[str, Any]] = None) -> FastAPI:
         )
 
     # --- proxy chat -----------------------------------------------------------------------
+
+    @app.get("/api/proxy/{target_id}/card", response_model=ProxyCardOut, tags=["Standin chat"], summary="Chat-header summary: age, location, occupation, interests")
+    def proxy_card(target_id: str, user_id: str = Depends(get_current_user)):
+        """What to show above the chat box before/while talking to a standin.
+        Only the real name stays anonymous; age, location, and occupation are
+        shared, plus interests/topics from training as conversation starters."""
+        target = users.get_by_id(target_id)
+        if target is not None and target_id != user_id \
+                and not target.get("profile_live"):
+            raise HTTPException(status_code=404, detail="User not found")
+        record = _fetch_training_record(target_id) or {}
+        identity = record.get("identity") or {}
+        spc_raw = record.get("spc_raw") or {}
+        context = spc_raw.get("context") or {} if isinstance(spc_raw, dict) else {}
+
+        def _clip(value: Optional[str], limit: int = 80) -> Optional[str]:
+            value = (value or "").strip()
+            return (value[:limit] or None)
+
+        interests = [s.strip() for s in (context.get("loves") or "").split(",")
+                     if s.strip()][:6]
+        topics = [t for t in (record.get("topics") or []) if t][:3]
+        target = target or {}
+        return ProxyCardOut(
+            pseudonym=target.get("pseudonym") or "Anonymous",
+            age=target.get("age"),
+            location=_clip(identity.get("location")) or _clip(target.get("city")),
+            hometown=_clip(identity.get("hometown")),
+            occupation=_clip(identity.get("occupation")),
+            interests=interests,
+            topics=topics,
+        )
 
     @app.post("/api/proxy/{target_id}/message", response_model=ProxyOut, tags=["Standin chat"], summary="Talk to a standin (echo conversation_id to continue)")
     def proxy_message(
