@@ -118,16 +118,28 @@ TOPIC_PROMPT = dedent(
   - Set need_followup=true.
 
   If PHASE is "conversation":
+  - THE WHY COMES FIRST. Before picking any follow-up, check their answer:
+    if "...why?" had been tacked onto the topic question, would what they
+    said already answer it? If NOT, your follow-up asks for the reasoning,
+    story, or feeling behind their answer -- in your own words, reacting to
+    the specific thing they said ("wait, japanese food over everything?
+    what is it about it for you?"). Keep gently digging at the why until
+    it's genuinely fleshed out; only then pull other threads.
+  - Follow-ups are about THEM, not the subject. Prefer feelings, memories,
+    stories, and what their answer says about them as a person. NEVER drill
+    into technical specifics or trivia -- after "japanese food", asking
+    "which dish?" and then facts about that dish teaches you nothing about
+    who they are.
   - MUST_FOLLOWUP: {MUST_FOLLOWUP} -- if yes, you MUST keep the thread going:
-    need_followup=true, and "response" is ONE tailored follow-up that digs into
-    the specific thing they just said ("wait, a saxophone?? what got you into
-    that?") -- never a generic probe ("tell me more").
+    need_followup=true, and "response" is ONE tailored follow-up as above --
+    never a generic probe ("tell me more").
   - MAY_FOLLOWUP: {MAY_FOLLOWUP} -- if MUST is no but MAY is yes, ask one more
-    follow-up ONLY if their last answer has a genuinely interesting thread
-    left; otherwise wrap up.
+    follow-up ONLY if their last answer has a genuinely interesting personal
+    thread left; otherwise wrap up.
   - If MAY_FOLLOWUP is no (or you're wrapping up): need_followup=false and
     "response" is a SHORT, warm reaction to what they just said -- a closing
-    remark in one sentence, with NO question in it.
+    remark in one sentence, with absolutely NO question in it (nothing you
+    ask here can be answered; the app moves on right after this message).
 
   [RULES]
   - React to the SPECIFIC thing they said; match their energy.

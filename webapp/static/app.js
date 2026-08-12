@@ -409,8 +409,8 @@ function renderSurveyCard(q, host, onResult, addMessage) {
 /* ================= MY PROFILE ================= */
 const MODES = [
   { key: "strict", label: "Grounded", hint: "Sticks strictly to what you've taught it; politely deflects everything else. Safest." },
-  { key: "mimic", label: "Natural", hint: "Sounds like you and makes reasonable small inferences from what it knows. Recommended." },
-  { key: "free", label: "Improv", hint: "Free-flowing — may riff beyond what you've shared. Most fun, least controlled." },
+  { key: "mimic", label: "Natural", hint: "Sounds like you and makes reasonable small inferences from what it knows." },
+  { key: "free", label: "Improv", hint: "Free-flowing — may riff beyond what you've shared. Most fun. This is the default." },
 ];
 
 async function renderMe() {
@@ -589,7 +589,7 @@ async function renderMe() {
   });
 
   /* mode picker */
-  let mode = me.proxy_mode || "mimic";
+  let mode = me.proxy_mode || "free";
   const modesHost = $("#me-modes", root);
   function paintModes() {
     modesHost.innerHTML = "";
@@ -761,14 +761,14 @@ async function renderProfile(targetId) {
        </div>`
     : "";
 
-  const header = anon
+  const header = (anon || isSelf)
     ? `<div class="row" style="align-items:center;gap:14px;margin-top:18px">
          ${avatarSVG(p.avatar, 84)}
          <div><h1 class="screen-title" style="margin:0">${esc(p.pseudonym)}</h1>
          ${meta ? `<span class="hint">${meta}</span><br>` : ""}
-         <span class="hint mono">anonymous standin</span></div>
+         <span class="hint mono">${isSelf ? "your standin — strangers see exactly this" : "anonymous standin"}</span></div>
        </div>
-       <p class="screen-sub" style="margin-top:10px">Only their name stays hidden — you'll see their real profile if you both like each other.</p>`
+       ${isSelf ? "" : `<p class="screen-sub" style="margin-top:10px">Only their name stays hidden — you'll see their real profile if you both like each other.</p>`}`
     : `<div class="row" style="align-items:center;gap:14px;margin-top:18px">
          ${avatarSVG(p.avatar, 64)}
          <div><h1 class="screen-title" style="margin:0">${esc(p.name)}<span class="hint">${p.age != null ? ", " + p.age : ""}${p.city ? " · " + esc(p.city) : ""}</span></h1>

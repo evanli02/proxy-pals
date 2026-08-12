@@ -101,7 +101,7 @@ def _new_user_doc(email: str, password_hash: str, name: str, age: int) -> Dict[s
         "gender": "",
         "pseudonym": random_pseudonym(),
         "avatar": random_avatar(),
-        "proxy_mode": "mimic",
+        "proxy_mode": "free",  # default speaking style: Improv
         "photos": [],
         "transcript_visibility": False,
         "profile_live": False,
@@ -134,7 +134,7 @@ def public_profile(doc: Dict[str, Any]) -> Dict[str, Any]:
         "gender": doc.get("gender", ""),
         "pseudonym": doc.get("pseudonym", ""),
         "avatar": doc.get("avatar", {}),
-        "proxy_mode": doc.get("proxy_mode", "mimic"),
+        "proxy_mode": doc.get("proxy_mode", "free"),
         "anonymous": False,
         "photos": list(doc.get("photos", [])),
         "transcript_visibility": bool(doc.get("transcript_visibility", False)),

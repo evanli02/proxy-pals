@@ -177,6 +177,38 @@ def test_topic_flow_followup_budget():
         pass
 
 
+def test_topic_budget_cap_never_strands_a_question():
+    """THE BUG: at the follow-up cap the LLM may still want to keep going --
+    its question-shaped reply must be DROPPED, never shown right before the
+    next-topic card (where the user can't answer it)."""
+    class EagerLLM:
+        def next_turn(self, *, model, messages):
+            return {"response": "but wait, tell me more??", "need_followup": True}
+
+    engine = InterviewEngine(bank=BANK, store=InMemoryInterviewStore(),
+                             llm=EagerLLM(), model="fake")
+    uid = "cap"
+    engine.respond(user_id=uid, text="hi")
+    for qid in ["ID_NAME", "ID_HOMETOWN", "ID_LOCATION", "ID_OCCUPATION", "ID_LANGUAGES"]:
+        engine.respond(user_id=uid, text=IDENTITY_ANSWERS[qid])
+    engine.choose_topic(user_id=uid, question_id="TOPIC_1", topic="japanese food")
+    state = engine.store.get_or_create(uid)
+
+    turns = 0
+    r = None
+    while state.active_topic_id and turns < 20:
+        r = engine.respond(user_id=uid, text="my answer")
+        turns += 1
+    assert turns == TOPIC_MAX_FOLLOWUPS + 1, "cap: max follow-ups then one ending turn"
+    # the ending turn advances to the next topic card...
+    assert r.question_payload["question_id"] == "TOPIC_2"
+    # ...WITHOUT surfacing the model's dangling follow-up question
+    assert not r.reply_text, "a question must never be shown right before the card"
+    followups = [m for m in state.messages
+                 if (m.get("metadata") or {}).get("topic_followup")]
+    assert len(followups) == TOPIC_MAX_FOLLOWUPS, "the extra question must not enter the transcript"
+
+
 def test_structured_flow_and_completion():
     engine = make_engine()
     r = run_full_interview(engine)
@@ -297,6 +329,9 @@ def test_api_round_trip_with_topics():
     s = client.post("/api/auth/signup", json={
         "email": "a@x.com", "password": "passwordpass", "name": "Al", "age": 22}).json()
     h = {"Authorization": f"Bearer {s['token']}"}
+
+    # new accounts default to the Improv speaking style
+    assert client.get("/api/users/me", headers=h).json()["proxy_mode"] == "free"
 
     # identity intake: five static questions, then the first topic card
     r = client.post("/api/interview/message", json={"text": "hi"}, headers=h).json()
@@ -475,6 +510,7 @@ if __name__ == "__main__":
     test_validation()
     test_identity_intake_is_verbatim_and_static()
     test_topic_flow_followup_budget()
+    test_topic_budget_cap_never_strands_a_question()
     test_structured_flow_and_completion()
     test_tipi_scoring_hand_computed()
     test_pvq_scoring_hand_computed()

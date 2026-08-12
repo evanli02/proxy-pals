@@ -1,6 +1,6 @@
 # Standin API Reference
 
-For client developers (KMP/mobile/web). Live interactive docs: `/docs` · machine spec for codegen: `/openapi.json` · verify deployed version: `GET /api/health` → `{"ok": true, "version": "0.5.0"}`.
+For client developers (KMP/mobile/web). Live interactive docs: `/docs` · machine spec for codegen: `/openapi.json` · verify deployed version: `GET /api/health` → `{"ok": true, "version": "0.5.1"}`.
 
 **Base URL:** `https://<your-app>.herokuapp.com`
 
@@ -44,14 +44,14 @@ Same response shape. `401` on bad credentials (same error whether the email exis
               "pattern": "spots", "blush": "on" },
   "photos": ["ph_ab12...", "ph_cd34..."],
   "transcript_visibility": false,
-  "proxy_mode": "mimic",
+  "proxy_mode": "free",
   "profile_live": true,
   "anonymous": false
 }
 ```
 
 ### PATCH /api/users/me → 200
-Partial update; send only fields you're changing. Editable: `name`, `age` (18–120), `bio` (≤2000), `city`, `gender`, `pseudonym` (≤40), `avatar` (full dict, see Avatar params), `transcript_visibility` (bool), `proxy_mode` (`"strict" | "mimic" | "free"` — UI labels: Grounded / Natural / Improv). Returns the updated own-profile. `profile_live` is **never** patchable — only completing the interview flips it.
+Partial update; send only fields you're changing. Editable: `name`, `age` (18–120), `bio` (≤2000), `city`, `gender`, `pseudonym` (≤40), `avatar` (full dict, see Avatar params), `transcript_visibility` (bool), `proxy_mode` (`"strict" | "mimic" | "free"` — UI labels: Grounded / Natural / Improv; default `"free"`). Returns the updated own-profile. `profile_live` is **never** patchable — only completing the interview flips it.
 
 ### POST /api/users/me/bio-suggestions → 200
 ```json

@@ -382,7 +382,7 @@ def create_app(deps: Optional[Dict[str, Any]] = None) -> FastAPI:
             return None
         return col.find_one({"user_id": user_id})
 
-    APP_VERSION = "0.5.0"  # bump on every deploy-worthy change
+    APP_VERSION = "0.5.1"  # bump on every deploy-worthy change
     app = FastAPI(title="Proxy Social Prototype API", version=APP_VERSION)
 
     # --- identity -------------------------------------------------------------
@@ -780,11 +780,11 @@ def create_app(deps: Optional[Dict[str, Any]] = None) -> FastAPI:
             if target_id != user_id and not target.get("profile_live"):
                 raise HTTPException(status_code=404, detail="User not found")
             visibility = bool(target.get("transcript_visibility", False))
-            mode = target.get("proxy_mode", "mimic")
+            mode = target.get("proxy_mode", "free")
         else:
             # No users record (e.g. legacy/imported proxy): fall back to store lookup
             visibility = users.get_visibility(target_id)
-            mode = "mimic"
+            mode = "free"
 
         conversation_id = body.conversation_id or f"px_{uuid.uuid4().hex}"
         result = proxy.respond(
@@ -793,7 +793,7 @@ def create_app(deps: Optional[Dict[str, Any]] = None) -> FastAPI:
             conversation_id=conversation_id,
             text=body.text,
             target_visibility_on=visibility,
-            mode=mode if mode in ("strict", "mimic", "free") else "mimic",
+            mode=mode if mode in ("strict", "mimic", "free") else "free",
         )
 
         if result.unanswered_question is not None:

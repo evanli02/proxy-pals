@@ -290,7 +290,13 @@ def _run_topic_turn(
             assistant_message=assistant_message,
         )
 
-    # wrap up: the reply (if any) is a short closing remark with no question
+    # Wrap up. Guard against the model trying to keep going after the budget
+    # is spent (need_followup=True with no budget left) or sneaking a question
+    # into its closing remark: the next card appears immediately after this
+    # turn, so a question here would be stranded unanswered. Drop any
+    # question-shaped reply instead of showing it.
+    if need_followup or "?" in reply_text:
+        reply_text = ""
     if reply_text:
         state.messages.append({
             "role": "assistant",

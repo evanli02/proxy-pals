@@ -32,6 +32,14 @@ TOPIC_PRESETS = [
     "What's the best meal you've ever eaten?",
     "What's a small thing that instantly ruins your day?",
     "Free time: relaxing or being productive?",
+    "What's the most spontaneous thing you've ever done?",
+    "If you could master any skill overnight, what would it be?",
+    "What's your comfort movie, show, or game?",
+    "What song or artist have you had on repeat lately?",
+    "What would your perfect day look like?",
+    "What's something you're weirdly competitive about?",
+    "What's the best piece of advice you've ever gotten?",
+    "Cats or dogs (or something else entirely)?",
 ]
 
 
